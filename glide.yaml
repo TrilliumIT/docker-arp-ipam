@@ -1,0 +1,9 @@
+package: github.com/TrilliumIT/docker-arp-ipam
+import:
+- package: github.com/Sirupsen/logrus
+- package: github.com/codegangsta/cli
+- package: github.com/docker/go-plugins-helpers
+  subpackages:
+  - ipam
+- package: github.com/llimllib/ipaddress
+- package: github.com/vishvananda/netlink

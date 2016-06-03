@@ -5,6 +5,7 @@ import (
 	//"strconv"
 	//"errors"
 	//"strings"
+	"net"
 	"fmt"
 	"crypto/rand"
 
@@ -29,7 +30,7 @@ func NewDriver() (*Driver, error) {
 
 func (d *Driver) GetCapabilities() (*ipam.CapabilitiesResponse, error) {
 	return &ipam.CapabilitiesResponse{
-		RequiresMacAddress: false,
+		RequiresMACAddress: false,
 	}, nil
 }
 
@@ -43,15 +44,15 @@ func (d *Driver) GetDefaultAddressSpaces() (*ipam.AddressSpacesResponse, error) 
 func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolResponse, error) {
 	if r.Pool == "" {
 		log.Errorf("Automatic pool assignment not supported")
-		return rmd.Errorf("Automatic pool assignment not supported"), nil
+		return nil, fmt.Errorf("Automatic pool assignment not supported")
 	}
 	if r.V6 {
 		log.Errorf("Automatic V6 pool assignment not supported.")
-		return rmd.Errorf("Automatic V6 pool assignment not supported."), nil
+		return nil, fmt.Errorf("Automatic V6 pool assignment not supported.")
 	}
-	if r.SubPool{
+	if r.SubPool != "" {
 		log.Errorf("SubPool not supported.")
-		return rmd.Errorf("SubPool not supported."), nil
+		return nil, fmt.Errorf("SubPool not supported.")
 	}
 	return &ipam.RequestPoolResponse{
 		PoolID: r.Pool,
@@ -72,7 +73,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 		return nil, err
 	}
 
-	res = ipam.RequestAddressResponse{}
+	res := &ipam.RequestAddressResponse{}
 
 	//FIXME checkneigh
 
@@ -80,10 +81,10 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 		addr := net.ParseIP(r.Address)
 		if addr == nil {
 			log.Errorf("Unable to parse address: %v", r.Address)
-			return nil, rmd.Errorf("Unable to parse address: %v", r.Address)
+			return nil, fmt.Errorf("Unable to parse address: %v", r.Address)
 		}
 		
-		check, err := tryAddress(addr)
+		check, err := tryAddress(&addr)
 		if err != nil {
 			log.Errorf("err: ", err)
 			return nil, err
@@ -93,16 +94,18 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			log.Errorf("Address already in use: %v", addr)
 			return nil, fmt.Errorf("Address already in use: %v", addr)
 		}
-		ret_addr = net.IPNet{ IP: addr, Mask: n.Mask }
+		ret_addr := net.IPNet{ IP: addr, Mask: n.Mask }
 		res.Address = ret_addr.String()
 		return res, nil
 	}
 
-	triedAddresses := make(map[net.IP]struct{})
-	triedAddresses[ipaddress.LastAddress(n)] = struct{}
-	triedAddresses[n.IP] = struct{}
+	triedAddresses := make(map[string]struct{})
+	var e struct{}
+	triedAddresses[string(ipaddress.LastAddress(n))] = e
+	triedAddresses[string(n.IP)] = e
 	ones, maskSize := n.Mask.Size()
-	int totalAddresses := 1<<(maskSize - ones)
+	var totalAddresses int
+	totalAddresses = 1<<(maskSize - ones)
 	for len(triedAddresses) < totalAddresses {
 		try := randAddr(n)
 		if _, ok := triedAddresses[try]; ok { continue }
@@ -118,7 +121,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			res.Address = ret_addr.String()
 			return res, nil
 		}
-		triedAddresses[try] = struct{}
+		triedAddresses[string(try)] = e
 	}
 
 	log.Errorf("All avaliable addresses are in use")

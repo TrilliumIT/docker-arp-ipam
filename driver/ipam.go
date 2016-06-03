@@ -289,14 +289,7 @@ func randAddr(n *net.IPNet) (net.IP, error) {
 }
 
 func tryAddress(ip *net.IP) (bool, error) {
-	firstcheck, err := checkNeigh(ip)
-	if err != nil {
-		return true, err
-	}
-	if firstcheck {
-		return firstcheck, err
-	}
-	err = probe(ip)
+	err := probe(ip)
 	if err != nil {
 		return true, err
 	}

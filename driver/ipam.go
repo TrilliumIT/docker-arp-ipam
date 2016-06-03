@@ -57,6 +57,29 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 		log.Errorf("SubPool not supported.")
 		return nil, fmt.Errorf("SubPool not supported.")
 	}
+	n, err := netlink.ParseIPNet(r.Pool)
+	if err != nil {
+		log.Errorf("Error parsing pool: %v", err)
+		return nil, err
+	}
+
+	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		log.Errorf("Error getting local addresses: %v", err)
+		return nil, err
+	}
+	innet := false
+	for _, addr := range addrs {
+		if n.Contains(addr.IP) {
+			innet = true
+			break
+		}
+	}
+	if !innet {
+		log.Errorf("Pool is not a local network: %v", n)
+		return nil, fmt.Errorf("Pool is not a local network")
+	}
+
 	return &ipam.RequestPoolResponse{
 		PoolID: r.Pool,
 		Pool: r.Pool,
@@ -79,8 +102,6 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	}
 
 	res := &ipam.RequestAddressResponse{}
-
-	//FIXME checkneigh
 
 	if r.Address != "" {
 		log.Debugf("Specific Address Requested: %v", r.Address)
@@ -125,7 +146,6 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			log.Errorf("Error generating random address: %v", err)
 			return nil, err
 		}
-		log.Debugf("Checking triedAddresses: %v", triedAddresses)
 		if _, ok := triedAddresses[string(try)]; ok { 
 			log.Debugf("Address already tried: %v", try)
 			continue
@@ -287,6 +307,19 @@ func probe(ip *net.IP) (error) {
 
 // Check neighbor table for IP. Return true if the address is in the neighbor cache
 func checkNeigh(ip *net.IP) (bool, error) {
+	log.Debugf("Checking local addresses")
+	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		log.Errorf("Error getting local addresses: %v", err)
+		return true, err
+	}
+	for _, addr := range addrs {
+		if ip.Equal(addr.IP) {
+			log.Debugf("This address is local: %v", ip)
+			return true, nil
+		}
+	}
+	log.Debugf("Checking neighbor table for %v", ip)
 	NeighLoop:
 		for {
 			var neighs []netlink.Neigh
@@ -302,17 +335,20 @@ func checkNeigh(ip *net.IP) (bool, error) {
 			}
 
 			for _, neigh := range neighs {
-				if &neigh.IP == ip {
+				if ip.Equal(neigh.IP) {
 					if neigh.HardwareAddr != nil {
 						return true, nil
+						log.Debugf("Hardware address found, ip in use")
 					}
 					if neigh.State == netlink.NUD_INCOMPLETE {
 						// Break and try again, the kernel is still trying to resolve
 						continue NeighLoop
 					}
+					log.Debugf("Entry exists, but no hardware address and state is not incomplete. Assuming address is not in use")
 					return false, nil
 				}
 			}
+			log.Debugf("IP not found in neighbor table")
 			return false, nil
 		}
 }

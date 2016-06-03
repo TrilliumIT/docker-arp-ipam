@@ -105,12 +105,20 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 
 	if r.Address != "" {
 		log.Debugf("Specific Address Requested: %v", r.Address)
+
 		addr := net.ParseIP(r.Address)
 		if addr == nil {
 			log.Errorf("Unable to parse address: %v", r.Address)
 			return nil, fmt.Errorf("Unable to parse address: %v", r.Address)
 		}
 		
+		if r.Options["RequestAddressType"] == "com.docker.network.gateway" {
+			log.Debugf("Gateway requested, approving")
+			ret_addr := net.IPNet{ IP: addr, Mask: n.Mask }
+			res.Address = ret_addr.String()
+			return res, nil
+		}
+
 		check, err := tryAddress(&addr)
 		if err != nil {
 			log.Errorf("err: ", err)

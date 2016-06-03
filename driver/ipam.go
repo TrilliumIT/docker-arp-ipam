@@ -6,10 +6,12 @@ import (
 	//"errors"
 	//"strings"
 	"fmt"
+	"crypto/rand"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/vishvananda/netlink"
+	"github.com/llimllib/ipaddress"
 
 	//"golang.org/x/net/context"
 	//dockerclient "github.com/docker/engine-api/client"
@@ -47,6 +49,10 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 		log.Errorf("Automatic V6 pool assignment not supported.")
 		return rmd.Errorf("Automatic V6 pool assignment not supported."), nil
 	}
+	if r.SubPool{
+		log.Errorf("SubPool not supported.")
+		return rmd.Errorf("SubPool not supported."), nil
+	}
 	return &ipam.RequestPoolResponse{
 		PoolID: r.Pool,
 		Pool: r.Pool,
@@ -59,12 +65,14 @@ func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
 
 func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
 
-	net, err := netlink.ParseIPNet(r.PoolID)
+	n, err := netlink.ParseIPNet(r.PoolID)
 	if err != nil {
 		log.Errorf("Unable to parse PoolID: %v", r.PoolID)
 		log.Errorf("err: %v", err)
 		return nil, err
 	}
+
+	res = ipam.RequestAddressResponse{}
 
 	//FIXME checkneigh
 
@@ -75,9 +83,8 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return nil, rmd.Errorf("Unable to parse address: %v", r.Address)
 		}
 		
-		check, err := checkNeigh(addr)
+		check, err := tryAddress(addr)
 		if err != nil {
-			log.Errorf("Error checking neighbors for: %v", addr)
 			log.Errorf("err: ", err)
 			return nil, err
 		}
@@ -86,29 +93,130 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			log.Errorf("Address already in use: %v", addr)
 			return nil, fmt.Errorf("Address already in use: %v", addr)
 		}
+		ret_addr = net.IPNet{ IP: addr, Mask: n.Mask }
+		res.Address = ret_addr.String()
+		return res, nil
 	}
+
+	triedAddresses := make(map[net.IP]struct{})
+	triedAddresses[ipaddress.LastAddress(n)] = struct{}
+	triedAddresses[n.IP] = struct{}
+	ones, maskSize := n.Mask.Size()
+	int totalAddresses := 1<<(maskSize - ones)
+	for len(triedAddresses) < totalAddresses {
+		try := randAddr(n)
+		if _, ok := triedAddresses[try]; ok { continue }
+
+		check, err := tryAddress(try)
+		if err != nil {
+			log.Errorf("err: ", err)
+			return nil, err
+		}
+
+		if !check {
+			ret_addr = net.IPNet{ IP: try, Mask: n.Mask }
+			res.Address = ret_addr.String()
+			return res, nil
+		}
+		triedAddresses[try] = struct{}
+	}
+
+	log.Errorf("All avaliable addresses are in use")
+	return nil, fmt.Errorf("All avaliable addresses are in use")
 }
 
-func checkNeigh(ip *net.IP) (bool, error) {
-	var neighs []netlink.Neigh
-	var err error
-	if net.To4(ip) != nil {
-		neighs, err = netlink.NeighList(0, netlink.FAMILY_V4)
-	} else {
-		neighs, err = netlink.NeighList(0, netlink.FAMILY_V6)
-	}
-	if err != nil {
-		log.Errorf("Error getting ip neighbors")
-		return nil, err
-	}
-
-	for _, neigh := range neighs {
-		if neigh.IP == ip {
-			return true, nil
+func randAddr(n *net.IPNet) net.IP {
+	// ip & (mask || random) should generate a random ip
+	ip = n.IP.To4()
+	if ip != nil {
+		rand_bytes = make([]byte, 4)
+		_, err := rand.Read(rand_bytes)
+		return net.IP{
+			ip[0] & (n.Mask[0] || rand_bytes[0]),
+			ip[1] & (n.Mask[1] || rand_bytes[1]),
+			ip[2] & (n.Mask[2] || rand_bytes[2]),
+			ip[3] & (n.Mask[3] || rand_bytes[3]),
 		}
 	}
 
-	return false, nil
+	rand_bytes = make([]byte, 16)
+	_, err := rand.Read(rand_bytes)
+	return net.IP{
+		ip[0] & (n.Mask[0] || rand_bytes[0]),
+		ip[1] & (n.Mask[1] || rand_bytes[1]),
+		ip[2] & (n.Mask[2] || rand_bytes[2]),
+		ip[3] & (n.Mask[3] || rand_bytes[3]),
+		ip[4] & (n.Mask[4] || rand_bytes[4]),
+		ip[5] & (n.Mask[5] || rand_bytes[5]),
+		ip[6] & (n.Mask[6] || rand_bytes[6]),
+		ip[7] & (n.Mask[7] || rand_bytes[7]),
+		ip[8] & (n.Mask[8] || rand_bytes[8]),
+		ip[9] & (n.Mask[9] || rand_bytes[9]),
+		ip[10] & (n.Mask[10] || rand_bytes[10]),
+		ip[11] & (n.Mask[11] || rand_bytes[11]),
+		ip[12] & (n.Mask[12] || rand_bytes[12]),
+		ip[13] & (n.Mask[13] || rand_bytes[13]),
+		ip[14] & (n.Mask[14] || rand_bytes[14]),
+		ip[15] & (n.Mask[15] || rand_bytes[15]),
+	}
+}
+
+func tryAddress(ip *net.IP) (bool, error) {
+	firstcheck, err := checkNeigh(ip)
+	if err != nil {
+		return nil, err
+	}
+	if firstcheck {
+		return firstcheck, err
+	}
+	err = probe(ip)
+	if err != nil {
+		return nil, err
+	}
+	return checkNeigh(ip)
+}
+
+func probe(ip *net.IP) (error) {
+	conn, err := net.Dial("udp", ip.String() + ":8765")
+	defer conn.Close()
+	if err != nil {
+		return err
+	}
+	conn.Write([]byte("probe"))
+	return nil
+}
+
+// Check neighbor table for IP. Return true if the address is in the neighbor cache
+func checkNeigh(ip *net.IP) (bool, error) {
+	NeighLoop:
+		for {
+			var neighs []netlink.Neigh
+			var err error
+			if net.To4(ip) != nil {
+				neighs, err = netlink.NeighList(0, netlink.FAMILY_V4)
+			} else {
+				neighs, err = netlink.NeighList(0, netlink.FAMILY_V6)
+			}
+			if err != nil {
+				log.Errorf("Error getting ip neighbors")
+				return nil, err
+			}
+
+			for _, neigh := range neighs {
+				incomplete := false
+				if neigh.IP == ip {
+					if neigh.HardwareAddr != nil {
+						return true, nil
+					}
+					if neigh.State == netlink.NUD_INCOMPLETE {
+						// Break and try again, the kernel is still trying to resolve
+						continue NeighLoop
+					}
+					return false, nil
+				}
+			}
+			return false, nil
+		}
 }
 
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {

@@ -5,5 +5,4 @@ import:
 - package: github.com/docker/go-plugins-helpers
   subpackages:
   - ipam
-- package: github.com/llimllib/ipaddress
 - package: github.com/vishvananda/netlink

@@ -1,5 +1,5 @@
-hash: a463bd5928625b8e98894f552e3490695aaf55837f49741e097e2074e353e0ef
-updated: 2016-06-03T09:17:50.501902424-04:00
+hash: 999531274a679478a7d0743dd31d8414b359e2b08ace1ca132e629ee05efe3fc
+updated: 2016-06-03T11:16:19.729255444-04:00
 imports:
 - name: github.com/codegangsta/cli
   version: edb24d02aa3cea2319c33f2836d4a5133907fe4c
@@ -21,12 +21,10 @@ imports:
   subpackages:
   - ipam
   - sdk
-- name: github.com/llimllib/ipaddress
-  version: 2154bde6c1739cd49c475abbcc82e3f4ff257e5e
 - name: github.com/Microsoft/go-winio
   version: 4f1a71750d95a5a8a46c40a67ffbed8129c2f138
 - name: github.com/opencontainers/runc
-  version: d6189a05cf7bac05e1b3d3cd2e3b538343eef200
+  version: 3211c9f721237f55a16da9c111e3d7e8777e53b5
   subpackages:
   - libcontainer/user
 - name: github.com/Sirupsen/logrus

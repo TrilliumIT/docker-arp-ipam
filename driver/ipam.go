@@ -24,17 +24,20 @@ type Driver struct {
 }
 
 func NewDriver() (*Driver, error) {
+	log.Debugf("NewDriver")
 	d := &Driver{}
 	return d, nil
 }
 
 func (d *Driver) GetCapabilities() (*ipam.CapabilitiesResponse, error) {
+	log.Debugf("GetCapabilities")
 	return &ipam.CapabilitiesResponse{
 		RequiresMACAddress: false,
 	}, nil
 }
 
 func (d *Driver) GetDefaultAddressSpaces() (*ipam.AddressSpacesResponse, error) {
+	log.Debugf("GetDefaultAddressSpaces")
 	return &ipam.AddressSpacesResponse{
 		LocalDefaultAddressSpace: "arp-ipam-default",
 		GlobalDefaultAddressSpace: "arp-ipam-default",
@@ -42,6 +45,7 @@ func (d *Driver) GetDefaultAddressSpaces() (*ipam.AddressSpacesResponse, error) 
 }
 
 func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolResponse, error) {
+	log.Debugf("RequestPool: %v", r)
 	if r.Pool == "" {
 		log.Errorf("Automatic pool assignment not supported")
 		return nil, fmt.Errorf("Automatic pool assignment not supported")
@@ -61,10 +65,12 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 }
 
 func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
+	log.Debugf("ReleasePool: %v", r)
 	return nil
 }
 
 func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
+	log.Debugf("RequestAddress: %v", r)
 
 	n, err := netlink.ParseIPNet(r.PoolID)
 	if err != nil {
@@ -232,5 +238,6 @@ func checkNeigh(ip *net.IP) (bool, error) {
 }
 
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {
+	log.Debugf("ReleaseAddress: %v", r)
 	return nil
 }

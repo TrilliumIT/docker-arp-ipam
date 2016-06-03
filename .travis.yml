@@ -1,28 +1,22 @@
 language: go
-
 go:
   - 1.5
-
 env:
   global:
     - GO15VENDOREXPERIMENT=1
     - GOOS=linux
-
 before_install:
   - go get github.com/Masterminds/glide
-
 install:
   - $GOPATH/bin/glide install
   - go get -t $($GOPATH/bin/glide novendor)
-
 script:
   - mv $GOPATH/bin/docker-arp-ipam ./
-
 deploy:
   - provider: releases
     skip_cleanup: true
     api_key:
-      secure: u33SSTfOE46yZ93W1Sh7xxemPf0ofebvygIGaR0cYiyamc98cRSYghNRL7enDupYprzrHesws7ERXkIOXFcqoHrfuxUnzzQAntlQsFNS/h/jieSDPH37l6tISJGYWj41anZ0c5lZOsurTpqKqB5g5Cq/+PPk9xn9a1bKQaH2SoLbCjgsJ9S/VlbX6FsduYnpS7Uo2dqxmJA1HkxCxebZvi/Iv4uS7P9fV4/vOYjftFrnPsDPkQbqbtsun1aeGf/hveSxe0ztCyTd0quTmhH5yxzg2cR9KVHrkTXg+qHqDrMcqdwzYP3zrx9EB//lsxwFPlwQUiIASebF49wRWst8FkQA4aAnpJN002/jeaKTaAqhwXLRNROFqFGioS2/WacHUQvAwo6ayiFdfiCkvM/yiI9mnroK0z6PAqZJqA9pVpF+dVcSJp4NDFXVdCGqA80YYYLES74zWtIYp/lwqWXOWc//Q7hWF/0Wp2uOlqzePbstItlXZeT6jvrJUEEoZ2dqoguaBXBxmqlwjVWMPuzvhwHEjg3bFmBAV8EPn8hg8z29zwWhbcTY40HWRWSPh53dS1Y9y192QcXcaDK7ecMahUy6WhYkxfyOvfYHvioj487tp+DYQywzk8EeUU2Sl+HFPwbMDLTtj2EjOFuMXMsy8mlpoc9ci4lkzc65kXoKWi4=
+      secure: ONVjHNYLHRJsJ6cJyN+No+y7K/0ez85D3s5H7Fcnd7QOxmMhNKv/ZHGDDDT0FCGiLvnAgNd3SseeU/OxFXQMf3Bi0XijLadpvEgVyq0mc9FitOl6/qJViOVJUCHU7Qs3L94c5KrV9eBEB5ILOKIdXMU79QyBMpiPWvZ5rmWudtfKfazmwAVcs5HjSaOssoQMTb57aE2Xd2ZusvHI+EDTkWi3aakty+I49oVBUDxwYy/SgE35HN0nLvZHEIHggNMZJ4QoAadDJzi+1FjwuHDFSBBmcYh0h+YRvLpyNhcUsrQGLvsFW/bd122HepAU8xGqZNjubAfYLOdlDyyPPd5K32hEPk6G7Mpn/OzWOg3GHsH1yo3o22b4IcdMcb98VtDraQge1Kr/KqV1KjHxVMLNCedBLpb017cHRN4dOc8/DC+M/1lMrjpBW7Aod7MYwV/4AAKE1pZiM4f2trrWVnYHG/owVUYpw3ddFqWyQGA2O2BrxItN/svQMnoKxzBCTQZrNr6N3Mv31W0st6knffk2kKTQmrWf+yNgQ2EpNQ+BdYY9JwyBwa8gAEwM5y1X4xyQPtF6MWJdmqIypTW/zeVXggJODOVaqTCmjWhx6uexdsTsDyZO/1GW06XXFdbQvR9DkM4G2UMl89UTXCDJ+NYHUHEAcQBy77ByvITvvD/IHOU=
     file: docker-arp-ipam
     on:
       tags: true

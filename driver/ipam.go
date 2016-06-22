@@ -69,6 +69,15 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 	}
 	for _, addr := range addrs {
 		if n.Contains(addr.IP) {
+			/*
+				Idea for speedup:
+				Kick off a goroutine here which fills a buffer of potential addresses
+				Probe on a regular schedule to be sure they're still unused, then when a request is fired down a channel
+				respond with one of these buffered addresses.
+
+				Need a goroutine kicked off in newdriver which has a has a channel where this goroutines channels can be sent to,
+				there they would be added to a map and retrieved from the requestaddress routine.
+			*/
 			return &ipam.RequestPoolResponse{
 				PoolID: r.Pool,
 				Pool:   r.Pool,

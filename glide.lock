@@ -1,19 +1,17 @@
-hash: 999531274a679478a7d0743dd31d8414b359e2b08ace1ca132e629ee05efe3fc
-updated: 2016-06-03T11:16:19.729255444-04:00
+hash: e167822794a1061b5a8132f6f2e47a3b36ad6e78c813ffe23ddc6ecc5dbf343e
+updated: 2016-06-21T21:40:26.831044857-04:00
 imports:
-- name: github.com/codegangsta/cli
-  version: edb24d02aa3cea2319c33f2836d4a5133907fe4c
 - name: github.com/coreos/go-systemd
-  version: 4484981625c1a6a2ecb40a390fcb6a9bcfee76e3
+  version: b32b8467dbea18858bfebf65c1a6a761090f2c31
   subpackages:
   - activation
   - util
 - name: github.com/coreos/pkg
-  version: 7f080b6c11ac2d2347c3cd7521e810207ea1a041
+  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
   - dlopen
 - name: github.com/docker/go-connections
-  version: c7838b258fbfa3fe88eecfb2a0e08ea0dbd6a646
+  version: 990a1a1a70b0da4c4cb70e117971a4f0babfbf1a
   subpackages:
   - sockets
 - name: github.com/docker/go-plugins-helpers
@@ -22,25 +20,31 @@ imports:
   - ipam
   - sdk
 - name: github.com/Microsoft/go-winio
-  version: 4f1a71750d95a5a8a46c40a67ffbed8129c2f138
+  version: ce2922f643c8fd76b46cadc7f404a06282678b34
 - name: github.com/opencontainers/runc
-  version: 3211c9f721237f55a16da9c111e3d7e8777e53b5
+  version: 5dc3f3576efb5262bf582217e93f86c93944374d
   subpackages:
   - libcontainer/user
 - name: github.com/Sirupsen/logrus
   version: f3cfb454f4c209e6668c95216c4744b8fddb2356
+- name: github.com/TrilliumIT/docker-arp-ipam
+  version: fbfb490629c1a56baefe99f78758a8b36e8ccddd
+  subpackages:
+  - driver
+- name: github.com/urfave/cli
+  version: 45677612ec27e6a286bdd96c77d32233e47316f7
 - name: github.com/vishvananda/netlink
-  version: 7995ff5647a22cbf0dc41bf5c0e977bdb0d5c6b7
+  version: 734d02c3e202f682c74b71314b2c61eec0170fd4
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/net
-  version: c4c3ea71919de159c9e246d7be66deb7f0a39a58
+  version: bc3663df0ac92f928d419e31e0d2af22e683a5a2
   subpackages:
   - proxy
 - name: golang.org/x/sys
-  version: 076b546753157f758b316e59bcb51e6807c04057
+  version: 62bee037599929a6e9146f29d10dd5208c43507d
   subpackages:
   - unix
   - windows

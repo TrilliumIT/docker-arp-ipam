@@ -10,11 +10,15 @@ import (
 
 type Driver struct {
 	ipam.Ipam
+	ncCh chan *neighCheck
 }
 
 func NewDriver() (*Driver, error) {
 	log.Debugf("NewDriver")
-	d := &Driver{}
+	d := &Driver{
+		ncCh: make(chan *neighCheck),
+	}
+	go checkNeigh(d.ncCh)
 	return d, nil
 }
 
@@ -109,13 +113,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return res, nil
 		}
 
-		check, err := tryAddress(&addr)
-		if err != nil {
-			log.Errorf("err: ", err)
-			return nil, err
-		}
-
-		if check {
+		if tryAddress(&addr, d.ncCh) {
 			log.Errorf("Address already in use: %v", addr)
 			return nil, fmt.Errorf("Address already in use: %v", addr)
 		}
@@ -149,13 +147,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			continue
 		}
 
-		check, err := tryAddress(&try)
-		if err != nil {
-			log.Errorf("err: ", err)
-			return nil, err
-		}
-
-		if !check {
+		if !tryAddress(&try, d.ncCh) {
 			log.Debugf("Returning address: %v", try)
 			ret_addr := net.IPNet{IP: try, Mask: n.Mask}
 			res.Address = ret_addr.String()
@@ -169,70 +161,15 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	return nil, fmt.Errorf("All avaliable addresses are in use")
 }
 
-func tryAddress(ip *net.IP) (bool, error) {
-	err := probe(ip)
-	if err != nil {
-		return true, err
+func tryAddress(ip *net.IP, ncCh chan<- *neighCheck) bool {
+	ch := make(chan bool)
+	nc := &neighCheck{
+		ip: ip,
+		ch: ch,
 	}
-	return checkNeigh(ip)
-}
-
-func probe(ip *net.IP) error {
-	conn, err := net.Dial("udp", ip.String()+":8765")
-	defer conn.Close()
-	if err != nil {
-		return err
-	}
-	conn.Write([]byte("probe"))
-	return nil
-}
-
-// Check neighbor table for IP. Return true if the address is in the neighbor cache
-func checkNeigh(ip *net.IP) (bool, error) {
-	log.Debugf("Checking local addresses")
-	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
-	if err != nil {
-		log.Errorf("Error getting local addresses: %v", err)
-		return true, err
-	}
-	for _, addr := range addrs {
-		if ip.Equal(addr.IP) {
-			log.Debugf("This address is local: %v", ip)
-			return true, nil
-		}
-	}
-	log.Debugf("Checking neighbor table for %v", ip)
-NeighLoop:
-	for {
-		var neighs []netlink.Neigh
-		var err error
-		if ip.To4() != nil {
-			neighs, err = netlink.NeighList(0, netlink.FAMILY_V4)
-		} else {
-			neighs, err = netlink.NeighList(0, netlink.FAMILY_V6)
-		}
-		if err != nil {
-			log.Errorf("Error getting ip neighbors")
-			return true, err
-		}
-
-		for _, neigh := range neighs {
-			if ip.Equal(neigh.IP) {
-				if neigh.HardwareAddr != nil {
-					return true, nil
-					log.Debugf("Hardware address found, ip in use")
-				}
-				if neigh.State == netlink.NUD_INCOMPLETE {
-					// Break and try again, the kernel is still trying to resolve
-					continue NeighLoop
-				}
-				log.Debugf("Entry exists, but no hardware address and state is not incomplete. Assuming address is not in use")
-				return false, nil
-			}
-		}
-		log.Debugf("IP not found in neighbor table")
-		return false, nil
-	}
+	ncCh <- nc
+	res := <-ch
+	return res
 }
 
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {

@@ -88,8 +88,12 @@ func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch cha
 				}
 				// if notified that this address is in use, delete it
 				ncUch <- nu
-				_ = <-nuch
-				delSug <- r
+				select {
+				case _ = <-quit:
+					return
+				case _ = <-nuch:
+					delSug <- r
+				}
 			}()
 		}
 	}

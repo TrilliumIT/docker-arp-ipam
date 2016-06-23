@@ -34,10 +34,8 @@ func (n *neighState) isReachable() bool {
 
 func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-chan struct{}) {
 	nch := make(chan *netlink.Neigh)
-	dch := make(chan struct{})
-	defer close(dch)
 
-	neighSubscribe(nch, dch)
+	neighSubscribe(nch, quit)
 	neighs := make(map[string]neighState)
 
 	for {

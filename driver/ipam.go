@@ -6,6 +6,7 @@ import (
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/vishvananda/netlink"
 	"net"
+	"sync"
 )
 
 type Driver struct {
@@ -16,14 +17,16 @@ type Driver struct {
 	quit  <-chan struct{}
 }
 
-func NewDriver(quit <-chan struct{}) (*Driver, error) {
+func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
 	log.Debugf("NewDriver")
 
 	ncCh := make(chan *neighCheck)
 	ncUch := make(chan *neighUseNotifier)
 	sgCh := make(chan *addrSuggest)
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer close(sgCh)
 		defer close(ncUch)
 		defer close(ncCh)
@@ -37,8 +40,17 @@ func NewDriver(quit <-chan struct{}) (*Driver, error) {
 		quit:  quit,
 	}
 
-	go checkNeigh(ncCh, ncUch, quit)
-	go genSuggestions(sgCh, ncCh, ncUch, quit)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		checkNeigh(ncCh, ncUch, quit, wg)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		genSuggestions(sgCh, ncCh, ncUch, quit, wg)
+	}()
 	return d, nil
 }
 

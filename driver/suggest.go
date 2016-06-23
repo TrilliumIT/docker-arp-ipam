@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"net"
+	"sync"
 )
 
 type addrSuggest struct {
@@ -12,7 +13,7 @@ type addrSuggest struct {
 	ech chan<- error
 }
 
-func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch chan<- *neighUseNotifier, quit <-chan struct{}) {
+func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch chan<- *neighUseNotifier, quit <-chan struct{}, wg sync.WaitGroup) {
 	max := 3
 	sugs := make(map[string][]*net.IPNet)
 	addSug := make(chan *net.IPNet)
@@ -67,7 +68,9 @@ func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch cha
 				continue
 			}
 			log.Debug("Refilling suggestions for %v", ns)
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				_, n, err := net.ParseCIDR(ns)
 				if err != nil {
 					log.Errorf("Failed to parse CIDR: %v", ns)

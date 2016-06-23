@@ -5,6 +5,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"net"
+	"sync"
 	"syscall"
 )
 
@@ -32,10 +33,10 @@ func (n *neighState) isReachable() bool {
 	return n.state != netlink.NUD_FAILED
 }
 
-func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-chan struct{}) {
+func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-chan struct{}, wg sync.WaitGroup) {
 	nch := make(chan *netlink.Neigh)
 
-	neighSubscribe(nch, quit)
+	neighSubscribe(nch, quit, wg)
 	neighs := make(map[string]neighState)
 
 	for {
@@ -102,18 +103,23 @@ func probe(ip *net.IP) {
 	return
 }
 
-func neighSubscribe(ch chan<- *netlink.Neigh, done <-chan struct{}) error {
+func neighSubscribe(ch chan<- *netlink.Neigh, done <-chan struct{}, wg sync.WaitGroup) error {
 	s, err := nl.Subscribe(syscall.NETLINK_ROUTE, syscall.RTNLGRP_NEIGH)
 	if err != nil {
 		return err
 	}
 	if done != nil {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			<-done
 			s.Close()
 		}()
 	}
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer close(ch)
 		for {
 			msgs, err := s.Receive()

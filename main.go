@@ -7,6 +7,7 @@ import (
 	"github.com/urfave/cli"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
@@ -48,23 +49,39 @@ func Run(ctx *cli.Context) error {
 		FullTimestamp:    true,
 	})
 
-	quit := make(chan struct{})
+	quit := make(chan struct{}) // tells other goroutines to quit
+	var wg sync.WaitGroup       // waits for goroutines to quit
+	done := make(chan struct{}) // tells main that we're done
+	ech := make(chan error)     // catches an error from serveTCP
+	var err error               // holds the final return value
 
 	c := make(chan os.Signal)
 	defer close(c)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
 	go func() {
-		<-c
+		select {
+		case _ = <-c:
+			log.Debugf("Sigterm caught. Closing")
+		case err = <-ech:
+			log.Error(err)
+		}
 		close(quit)
+		wg.Wait()
+		close(done)
 	}()
 
-	d, err := driver.NewDriver(quit)
+	d, err := driver.NewDriver(quit, wg)
 	if err != nil {
 		log.Error("Error initializing driver")
-		return err
+		ech <- err
 	}
 
 	h := ipam.NewHandler(d)
-	return h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
+	go func() {
+		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
+	}()
+
+	<-done
+	return nil
 }

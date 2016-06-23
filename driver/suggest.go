@@ -24,6 +24,9 @@ func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch cha
 		case _ = <-quit:
 			return
 		case sg := <-sgCh:
+			if _, ok := sugs[sg.ipn.String()]; !ok {
+				sugs[sg.ipn.String()] = []*net.IPNet{}
+			}
 			for i, s := range sugs[sg.ipn.String()] {
 				if !tryAddress(&s.IP, ncCh) {
 					log.Debugf("Returning suggested address: %v", s)
@@ -58,10 +61,12 @@ func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch cha
 		}
 
 		// refill the sugestions
+		log.Debugf("Checking and refilling suggestions")
 		for ns, s := range sugs {
 			if len(s) >= max {
 				continue
 			}
+			log.Debug("Refilling suggestions for %v", ns)
 			go func() {
 				_, n, err := net.ParseCIDR(ns)
 				if err != nil {

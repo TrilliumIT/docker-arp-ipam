@@ -40,7 +40,6 @@ func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-
 	neighSubscribe(nch, dch)
 	neighs := make(map[string]neighState)
 
-Main:
 	for {
 		select {
 		case _ = <-quit:
@@ -53,32 +52,41 @@ Main:
 					delete(neighs, n.IP.String())
 				}
 				if len(ns.cbs) > 0 {
+					log.Debugf("Callbacks waiting on unknown neigh update. Probing %v", n.IP)
 					probe(&n.IP)
 				}
-				continue Main
+				break
 			}
 			if ns.isReachable() {
 				for _, cb := range ns.ncbs {
+					log.Debugf("Closing in use callback for %v", n.IP)
 					close(cb)
 				}
 			}
 			for _, cb := range ns.cbs {
+				log.Debugf("Returning answer to callback for %v", n.IP)
 				cb <- ns.isReachable()
 			}
 			ns.cbs = []chan<- bool{}
+			neighs[n.IP.String()] = ns
 		case n := <-ncCh:
 			ns := neighs[n.ip.String()]
 			if ns.isKnown() {
+				log.Debugf("Already have answer for requested callback on %v", n.ip)
 				n.ch <- ns.isReachable()
-				continue Main
+				break
 			}
+			log.Debugf("Registering callback on %v", n.ip)
 			ns.cbs = append(ns.cbs, n.ch)
+			neighs[n.ip.String()] = ns
 			probe(n.ip)
 		case n := <-ncUCh:
 			ns := neighs[n.ip.String()]
 			if ns.isKnown() && ns.isReachable() {
+				log.Debugf("Already in use, closing callback on %v", n.ip)
 				close(n.ch)
 			}
+			log.Debugf("Registering in use callback for %v", n.ip)
 			ns.ncbs = append(ns.ncbs, n.ch)
 			neighs[n.ip.String()] = ns
 		}

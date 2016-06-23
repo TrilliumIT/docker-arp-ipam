@@ -1,12 +1,14 @@
 package main
 
 import (
-	"os"
-	"github.com/TrilliumIT/docker-arp-ipam/driver"
-
 	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/docker-arp-ipam/driver"
 	"github.com/docker/go-plugins-helpers/ipam"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 func main() {
@@ -36,25 +38,50 @@ func main() {
 }
 
 // Run initializes the driver
-func Run(ctx *cli.Context) {
+func Run(ctx *cli.Context) error {
 	if ctx.Bool("debug") {
 		log.SetLevel(log.DebugLevel)
 	}
 	log.SetFormatter(&log.TextFormatter{
-		ForceColors: false,
-		DisableColors: true,
+		ForceColors:      false,
+		DisableColors:    true,
 		DisableTimestamp: false,
-		FullTimestamp: true,
+		FullTimestamp:    true,
 	})
-	d, err := driver.NewDriver()
+
+	quit := make(chan struct{}) // tells other goroutines to quit
+	var wg sync.WaitGroup       // waits for goroutines to quit
+	done := make(chan struct{}) // tells main that we're done
+	ech := make(chan error)     // catches an error from serveTCP
+	var err error               // holds the final return value
+
+	c := make(chan os.Signal)
+	defer close(c)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		select {
+		case _ = <-c:
+			log.Debugf("Sigterm caught. Closing")
+		case err = <-ech:
+			log.Error(err)
+		}
+		close(quit)
+		wg.Wait()
+		close(done)
+	}()
+
+	d, err := driver.NewDriver(quit, wg)
 	if err != nil {
 		log.Error("Error initializing driver")
-		log.Fatal(err)
+		ech <- err
 	}
+
 	h := ipam.NewHandler(d)
-	err = h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
-	if err != nil {
-		log.Error("Error serving tcp")
-		log.Fatal(err)
-	}
+	go func() {
+		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
+	}()
+
+	<-done
+	return nil
 }

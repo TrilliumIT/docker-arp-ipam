@@ -3,6 +3,7 @@ package driver
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/iputil"
 	"net"
 	"sync"
 )
@@ -45,18 +46,18 @@ func genSuggestions(sgCh <-chan *addrSuggest, ncCh chan<- *neighCheck, ncUch cha
 			sg.ch <- r
 			break Sel
 		case a := <-addSug:
-			for _, ad := range sugs[networkID(a).String()] {
+			for _, ad := range sugs[iputil.NetworkID(a).String()] {
 				if ad.IP.Equal(a.IP) {
 					break Sel
 				}
 			}
-			sugs[networkID(a).String()] = append(sugs[networkID(a).String()], a)
+			sugs[iputil.NetworkID(a).String()] = append(sugs[iputil.NetworkID(a).String()], a)
 		case a := <-delSug:
-			for i, ad := range sugs[networkID(a).String()] {
+			for i, ad := range sugs[iputil.NetworkID(a).String()] {
 				if !ad.IP.Equal(a.IP) {
 					continue
 				}
-				sugs[networkID(a).String()] = append(sugs[networkID(a).String()][:i], sugs[networkID(a).String()][i+1:]...)
+				sugs[iputil.NetworkID(a).String()] = append(sugs[iputil.NetworkID(a).String()][:i], sugs[iputil.NetworkID(a).String()][i+1:]...)
 				break Sel
 			}
 		}
@@ -106,10 +107,10 @@ func getRandomAddr(n *net.IPNet, ncCh chan<- *neighCheck) (*net.IPNet, error) {
 	log.Debugf("Generating Random Address in network %v", n)
 	triedAddresses := make(map[string]struct{})
 	var e struct{}
-	lastAddress := lastAddr(n)
+	lastAddress := iputil.LastAddr(n)
 	log.Debugf("Excluding last address: %v", lastAddress)
 	triedAddresses[string(lastAddress)] = e
-	firstAddress := firstAddr(n)
+	firstAddress := iputil.FirstAddr(n)
 	log.Debugf("Excluding network address: %v", firstAddress)
 	triedAddresses[string(firstAddress)] = e
 	ones, maskSize := n.Mask.Size()
@@ -117,7 +118,7 @@ func getRandomAddr(n *net.IPNet, ncCh chan<- *neighCheck) (*net.IPNet, error) {
 	totalAddresses = 1 << uint8(maskSize-ones)
 	log.Debugf("Address avaliable to try: %v", totalAddresses)
 	for len(triedAddresses) < totalAddresses {
-		try, err := randAddr(n)
+		try, err := iputil.RandAddr(n)
 		log.Debugf("Trying random address: %v", try)
 		if err != nil {
 			log.Errorf("Error generating random address: %v", err)

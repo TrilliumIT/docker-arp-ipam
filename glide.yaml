@@ -6,3 +6,4 @@ import:
   subpackages:
   - ipam
 - package: github.com/vishvananda/netlink
+- package: github.com/TrilliumIT/iputil

@@ -1,5 +1,5 @@
-hash: e167822794a1061b5a8132f6f2e47a3b36ad6e78c813ffe23ddc6ecc5dbf343e
-updated: 2016-06-23T11:54:25.074124602-04:00
+hash: bc7d79b96ffc383c4aa87c984917e0a058c7447f3bc28e2194ff7f6c5952621f
+updated: 2016-06-23T18:33:26.056323281-04:00
 imports:
 - name: github.com/coreos/go-systemd
   version: b32b8467dbea18858bfebf65c1a6a761090f2c31
@@ -7,7 +7,7 @@ imports:
   - activation
   - util
 - name: github.com/coreos/pkg
-  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
+  version: a48e304ff9331be6d5df352b6b47bd1395ab5dd7
   subpackages:
   - dlopen
 - name: github.com/docker/go-connections
@@ -22,11 +22,13 @@ imports:
 - name: github.com/Microsoft/go-winio
   version: ce2922f643c8fd76b46cadc7f404a06282678b34
 - name: github.com/opencontainers/runc
-  version: 5dc3f3576efb5262bf582217e93f86c93944374d
+  version: 9b3a2f16345aa015ca286835f6f5eb67ea60aa4b
   subpackages:
   - libcontainer/user
 - name: github.com/Sirupsen/logrus
   version: f3cfb454f4c209e6668c95216c4744b8fddb2356
+- name: github.com/TrilliumIT/iputil
+  version: 63d127b88d3a155cea8b3d96028804235c9352fa
 - name: github.com/urfave/cli
   version: 4205e9c4ee9672a8df5bb4fe486a8aa07e1e4037
 - name: github.com/vishvananda/netlink

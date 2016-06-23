@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/TrilliumIT/docker-arp-ipam/driver"
-	"os"
-
 	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/docker-arp-ipam/driver"
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/urfave/cli"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -65,9 +66,5 @@ func Run(ctx *cli.Context) error {
 	}
 
 	h := ipam.NewHandler(d)
-	err = h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
-	if err != nil {
-		log.Error("Error serving tcp")
-		return err
-	}
+	return h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
 }

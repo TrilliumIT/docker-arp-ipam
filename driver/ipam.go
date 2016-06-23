@@ -10,15 +10,35 @@ import (
 
 type Driver struct {
 	ipam.Ipam
-	ncCh chan *neighCheck
+	ncCh  chan<- *neighCheck       // Channel to request a neighbor check
+	ncUch chan<- *neighUseNotifier // Channel to close if neighbor becomes in use
+	sgCh  chan<- *addrSuggest      // Channel to request a suggested IP
+	quit  <-chan struct{}
 }
 
-func NewDriver() (*Driver, error) {
+func NewDriver(quit <-chan struct{}) (*Driver, error) {
 	log.Debugf("NewDriver")
+
+	ncCh := make(chan *neighCheck)
+	ncUch := make(chan *neighUseNotifier)
+	sgCh := make(chan *addrSuggest)
+
+	go func() {
+		defer close(sgCh)
+		defer close(ncUch)
+		defer close(ncCh)
+		_ = <-quit
+	}()
+
 	d := &Driver{
-		ncCh: make(chan *neighCheck),
+		ncCh:  ncCh,
+		ncUch: ncUch,
+		sgCh:  sgCh,
+		quit:  quit,
 	}
-	go checkNeigh(d.ncCh)
+
+	go checkNeigh(ncCh, ncUch, quit)
+	go genSuggestions(sgCh, ncCh, ncUch, quit)
 	return d, nil
 }
 
@@ -123,46 +143,31 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	}
 
 	log.Debugf("Random Address Requested in network %v", n)
-	triedAddresses := make(map[string]struct{})
-	var e struct{}
-	lastAddress := lastAddr(n)
-	log.Debugf("Excluding last address: %v", lastAddress)
-	triedAddresses[string(lastAddress)] = e
-	firstAddress := firstAddr(n)
-	log.Debugf("Excluding network address: %v", firstAddress)
-	triedAddresses[string(firstAddress)] = e
-	ones, maskSize := n.Mask.Size()
-	var totalAddresses int
-	totalAddresses = 1 << uint8(maskSize-ones)
-	log.Debugf("Address avaliable to try: %v", totalAddresses)
-	for len(triedAddresses) < totalAddresses {
-		try, err := randAddr(n)
-		log.Debugf("Trying random address: %v", try)
-		if err != nil {
-			log.Errorf("Error generating random address: %v", err)
-			return nil, err
-		}
-		if _, ok := triedAddresses[string(try)]; ok {
-			log.Debugf("Address already tried: %v", try)
-			continue
-		}
 
-		if !tryAddress(&try, d.ncCh) {
-			log.Debugf("Returning address: %v", try)
-			ret_addr := net.IPNet{IP: try, Mask: n.Mask}
-			res.Address = ret_addr.String()
-			return res, nil
-		}
-		triedAddresses[string(try)] = e
-		log.Debugf("Address in use: %v", try)
+	ch := make(chan *net.IPNet)
+	defer close(ch)
+	ech := make(chan error)
+	defer close(ech)
+	d.sgCh <- &addrSuggest{
+		ipn: n,
+		ch:  ch,
+		ech: ech,
 	}
-
-	log.Errorf("All avaliable addresses are in use")
-	return nil, fmt.Errorf("All avaliable addresses are in use")
+	select {
+	case _ = <-d.quit:
+		return nil, fmt.Errorf("Shutting down")
+	case err := <-ech:
+		log.Errorf("Error getting random address")
+		return nil, err
+	case ret_addr := <-ch:
+		res.Address = ret_addr.String()
+	}
+	return res, nil
 }
 
 func tryAddress(ip *net.IP, ncCh chan<- *neighCheck) bool {
 	ch := make(chan bool)
+	defer close(ch)
 	nc := &neighCheck{
 		ip: ip,
 		ch: ch,

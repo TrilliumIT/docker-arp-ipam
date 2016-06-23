@@ -70,6 +70,10 @@ func firstAddr(n *net.IPNet) net.IP {
 	}
 }
 
+func networkID(n *net.IPNet) *net.IPNet {
+	return &net.IPNet{IP: firstAddr(n), Mask: n.Mask}
+}
+
 func randAddr(n *net.IPNet) (net.IP, error) {
 	// ip & (mask | random) should generate a random ip
 	log.Debugf("Generating random address for network: %v", n)

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"os"
 	"github.com/TrilliumIT/docker-arp-ipam/driver"
+	"os"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 func main() {
@@ -36,25 +36,38 @@ func main() {
 }
 
 // Run initializes the driver
-func Run(ctx *cli.Context) {
+func Run(ctx *cli.Context) error {
 	if ctx.Bool("debug") {
 		log.SetLevel(log.DebugLevel)
 	}
 	log.SetFormatter(&log.TextFormatter{
-		ForceColors: false,
-		DisableColors: true,
+		ForceColors:      false,
+		DisableColors:    true,
 		DisableTimestamp: false,
-		FullTimestamp: true,
+		FullTimestamp:    true,
 	})
-	d, err := driver.NewDriver()
+
+	quit := make(chan struct{})
+
+	c := make(chan os.Signal)
+	defer close(c)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		close(quit)
+	}()
+
+	d, err := driver.NewDriver(quit)
 	if err != nil {
 		log.Error("Error initializing driver")
-		log.Fatal(err)
+		return err
 	}
+
 	h := ipam.NewHandler(d)
 	err = h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"))
 	if err != nil {
 		log.Error("Error serving tcp")
-		log.Fatal(err)
+		return err
 	}
 }

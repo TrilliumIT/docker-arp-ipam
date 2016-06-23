@@ -13,9 +13,15 @@ type neighCheck struct {
 	ch chan<- bool
 }
 
+type neighUseNotifier struct {
+	ip *net.IP
+	ch chan<- struct{}
+}
+
 type neighState struct {
 	state int
-	cbs   []chan<- bool
+	cbs   []chan<- bool     // callbacks to notify on address in use or not
+	ncbs  []chan<- struct{} //channel to be closed if address comes in use
 }
 
 func (n *neighState) isKnown() bool {
@@ -26,7 +32,7 @@ func (n *neighState) isReachable() bool {
 	return n.state != netlink.NUD_FAILED
 }
 
-func checkNeigh(ncCh <-chan *neighCheck) {
+func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-chan struct{}) {
 	nch := make(chan *netlink.Neigh)
 	dch := make(chan struct{})
 	defer close(dch)
@@ -37,16 +43,24 @@ func checkNeigh(ncCh <-chan *neighCheck) {
 Main:
 	for {
 		select {
+		case _ = <-quit:
+			return
 		case n := <-nch:
 			ns := neighs[n.IP.String()]
 			ns.state = n.State
 			if !ns.isKnown() {
-				if len(ns.cbs) == 0 {
+				if len(ns.cbs) == 0 && len(ns.ncbs) == 0 {
 					delete(neighs, n.IP.String())
-					continue Main
 				}
-				probe(&n.IP)
+				if len(ns.cbs) > 0 {
+					probe(&n.IP)
+				}
 				continue Main
+			}
+			if ns.isReachable() {
+				for _, cb := range ns.ncbs {
+					close(cb)
+				}
 			}
 			for _, cb := range ns.cbs {
 				cb <- ns.isReachable()
@@ -60,6 +74,13 @@ Main:
 			}
 			ns.cbs = append(ns.cbs, n.ch)
 			probe(n.ip)
+		case n := <-ncUCh:
+			ns := neighs[n.ip.String()]
+			if ns.isKnown() && ns.isReachable() {
+				close(n.ch)
+			}
+			ns.ncbs = append(ns.ncbs, n.ch)
+			neighs[n.ip.String()] = ns
 		}
 	}
 }

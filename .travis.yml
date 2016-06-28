@@ -1,17 +1,22 @@
 language: go
 go:
-  - 1.5
+  - 1.6
+
 env:
   global:
     - GO15VENDOREXPERIMENT=1
     - GOOS=linux
+
 before_install:
   - go get github.com/Masterminds/glide
-install:
   - $GOPATH/bin/glide install
+
+install:
   - go get -t $($GOPATH/bin/glide novendor)
+
 script:
   - mv $GOPATH/bin/docker-arp-ipam ./
+
 deploy:
   - provider: releases
     skip_cleanup: true

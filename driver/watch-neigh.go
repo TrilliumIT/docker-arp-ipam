@@ -59,7 +59,12 @@ func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-
 			if ns.isReachable() {
 				for _, cb := range ns.ncbs {
 					log.Debugf("Closing in use callback for %v", n.IP)
-					close(cb)
+					// Catch panics closing closed channel. This can happen if
+					// we get 2 updates very quickly
+					func() {
+						defer func() { recover() }()
+						close(cb)
+					}()
 				}
 			}
 			for _, cb := range ns.cbs {

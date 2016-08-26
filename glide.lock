@@ -1,49 +1,49 @@
 hash: bc7d79b96ffc383c4aa87c984917e0a058c7447f3bc28e2194ff7f6c5952621f
-updated: 2016-06-27T21:09:48.766125368-04:00
+updated: 2016-08-26T13:46:12.31417199-04:00
 imports:
 - name: github.com/coreos/go-systemd
-  version: b32b8467dbea18858bfebf65c1a6a761090f2c31
+  version: 5c49e4850c879a0ddc061e8f4adcf307de8a8bc2
   subpackages:
   - activation
   - util
 - name: github.com/coreos/pkg
-  version: a48e304ff9331be6d5df352b6b47bd1395ab5dd7
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
   - dlopen
 - name: github.com/docker/go-connections
-  version: 990a1a1a70b0da4c4cb70e117971a4f0babfbf1a
+  version: 0bad1a3951398f88ef4dd75fdb42af374430be89
   subpackages:
   - sockets
 - name: github.com/docker/go-plugins-helpers
-  version: dd9c6831a796ea025dfae8448d6a34d081b99898
+  version: f3a3876798ee4f63bee3e7ee8911a2c27e7710b9
   subpackages:
   - ipam
   - sdk
 - name: github.com/Microsoft/go-winio
   version: ce2922f643c8fd76b46cadc7f404a06282678b34
 - name: github.com/opencontainers/runc
-  version: 629e35666d31f743090452416c8df207d9fdbd34
+  version: c520720728515d546d8debe937ff489abf718b79
   subpackages:
   - libcontainer/user
 - name: github.com/Sirupsen/logrus
-  version: f3cfb454f4c209e6668c95216c4744b8fddb2356
+  version: 08a8a7c27e3d058a8989316a850daad1c10bf4ab
 - name: github.com/TrilliumIT/iputil
   version: 4d4f3832a5918703488c766a2cccfac782db23b9
 - name: github.com/urfave/cli
-  version: 4205e9c4ee9672a8df5bb4fe486a8aa07e1e4037
+  version: 168c95418e66e019fe17b8f4f5c45aa62ff80e23
 - name: github.com/vishvananda/netlink
-  version: 77483a0e697ebcc2584461e9624b611767e7d203
+  version: 63381f39fceb1c5c13503a90e1c2603caeafe3c5
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/net
-  version: 04557861f124410b768b1ba5bb3a91b705afbfc6
+  version: 07b51741c1d6423d4a6abab1c49940ec09cb1aaf
   subpackages:
   - proxy
 - name: golang.org/x/sys
-  version: 62bee037599929a6e9146f29d10dd5208c43507d
+  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
   subpackages:
   - unix
   - windows
-devImports: []
+testImports: []

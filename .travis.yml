@@ -16,12 +16,19 @@ install:
 
 script:
   - mv $GOPATH/bin/docker-arp-ipam ./
+  - md5sum docker-arp-ipam > md5.txt
+  - sha256sum docker-arp-ipam > sha256.txt
+  - sha512sum docker-arp-ipam > sha512.txt
 
 deploy:
   - provider: releases
     skip_cleanup: true
     api_key:
       secure: ONVjHNYLHRJsJ6cJyN+No+y7K/0ez85D3s5H7Fcnd7QOxmMhNKv/ZHGDDDT0FCGiLvnAgNd3SseeU/OxFXQMf3Bi0XijLadpvEgVyq0mc9FitOl6/qJViOVJUCHU7Qs3L94c5KrV9eBEB5ILOKIdXMU79QyBMpiPWvZ5rmWudtfKfazmwAVcs5HjSaOssoQMTb57aE2Xd2ZusvHI+EDTkWi3aakty+I49oVBUDxwYy/SgE35HN0nLvZHEIHggNMZJ4QoAadDJzi+1FjwuHDFSBBmcYh0h+YRvLpyNhcUsrQGLvsFW/bd122HepAU8xGqZNjubAfYLOdlDyyPPd5K32hEPk6G7Mpn/OzWOg3GHsH1yo3o22b4IcdMcb98VtDraQge1Kr/KqV1KjHxVMLNCedBLpb017cHRN4dOc8/DC+M/1lMrjpBW7Aod7MYwV/4AAKE1pZiM4f2trrWVnYHG/owVUYpw3ddFqWyQGA2O2BrxItN/svQMnoKxzBCTQZrNr6N3Mv31W0st6knffk2kKTQmrWf+yNgQ2EpNQ+BdYY9JwyBwa8gAEwM5y1X4xyQPtF6MWJdmqIypTW/zeVXggJODOVaqTCmjWhx6uexdsTsDyZO/1GW06XXFdbQvR9DkM4G2UMl89UTXCDJ+NYHUHEAcQBy77ByvITvvD/IHOU=
-    file: docker-arp-ipam
+    file:
+      - docker-arp-ipam
+      - md5.txt
+      - sha256.txt
+      - sha512.txt
     on:
       tags: true

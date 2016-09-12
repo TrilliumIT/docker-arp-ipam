@@ -77,6 +77,7 @@ func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-
 			ns := neighs[n.ip.String()]
 			if ns.isKnown() {
 				log.Debugf("Already have answer for requested callback on %v", n.ip)
+				log.Debugf("%v reachable: %v", n.ip, ns.isReachable)
 				n.ch <- ns.isReachable()
 				break
 			}

@@ -191,5 +191,21 @@ func tryAddress(ip *net.IP, ncCh chan<- *neighCheck) bool {
 
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {
 	log.Debugf("ReleaseAddress: %v", r)
+	ip := net.ParseIP(r.Address)
+	log.Debugf("Deleting entry from arp table for %v", ip)
+	neighs, err := netlink.NeighList(0, netlink.FAMILY_ALL)
+	if err != nil {
+		log.WithError(err).Error("Failed to get arp table")
+		return err
+	}
+	for _, n := range neighs {
+		if ip.Equal(n.IP) {
+			err := netlink.NeighDel(&n)
+			if err != nil {
+				log.WithError(err).Error("Failed to delete arp entry for %v", ip)
+			}
+			return err
+		}
+	}
 	return nil
 }

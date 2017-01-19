@@ -1,13 +1,18 @@
 package driver
 
 import (
+	"net"
+	"os"
+	"strconv"
+	"sync"
+	"syscall"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
-	"net"
-	"sync"
-	"syscall"
 )
+
+const neighChanLen = 256
 
 type neighCheck struct {
 	ip *net.IP
@@ -34,7 +39,15 @@ func (n *neighState) isReachable() bool {
 }
 
 func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-chan struct{}, wg sync.WaitGroup) {
-	nch := make(chan *netlink.Neigh, 32)
+	chanLenStr := os.Getenv("NEIGHCHANLEN")
+	chanLen, err := strconv.Atoi(chanLenStr)
+	if err != nil {
+		chanLen = neighChanLen
+		if chanLenStr != "" {
+			log.WithField("ChanLen", chanLenStr).Error("NEIGHCHANLEN could not be parsed to an int")
+		}
+	}
+	nch := make(chan *netlink.Neigh, chanLen)
 
 	neighSubscribe(nch, quit, wg)
 	neighs := make(map[string]neighState)
@@ -44,6 +57,9 @@ func checkNeigh(ncCh <-chan *neighCheck, ncUCh <-chan *neighUseNotifier, quit <-
 		case _ = <-quit:
 			return
 		case n := <-nch:
+			if len(nch) > int(float64(chanLen)*0.8) {
+				log.WithField("Length", len(nch)).Warn("Neighbor Chan length exceeded 80%% of NEIGHCHANLEN")
+			}
 			ns := neighs[n.IP.String()]
 			ns.state = n.State
 			if !ns.isKnown() {

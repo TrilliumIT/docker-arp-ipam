@@ -89,6 +89,10 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 		return nil, err
 	}
 
+	if err := verifyLocalNet(n); err != nil {
+		return nil, err
+	}
+
 	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
 	if err != nil {
 		log.Errorf("Error getting local addresses: %v", err)
@@ -112,6 +116,26 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 	}, nil
 }
 
+func verifyLocalNet(n *net.IPNet) error {
+	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		log.Errorf("Error getting local addresses: %v", err)
+		return err
+	}
+	innet := false
+	for _, addr := range addrs {
+		if n.Contains(addr.IP) {
+			innet = true
+			break
+		}
+	}
+	if !innet {
+		log.Errorf("Pool is not a local network: %v", n)
+		return fmt.Errorf("Pool is not a local network")
+	}
+	return nil
+}
+
 func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
 	log.Debugf("ReleasePool: %v", r)
 	return nil
@@ -124,6 +148,10 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	if err != nil {
 		log.Errorf("Unable to parse PoolID: %v", r.PoolID)
 		log.Errorf("err: %v", err)
+		return nil, err
+	}
+
+	if err := verifyLocalNet(n); err != nil {
 		return nil, err
 	}
 

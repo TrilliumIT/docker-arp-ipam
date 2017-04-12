@@ -159,6 +159,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 
 	if r.Address != "" {
 		log.Debugf("Specific Address Requested: %v", r.Address)
+		probe(&n.IP)
 
 		addr := net.ParseIP(r.Address)
 		if addr == nil {

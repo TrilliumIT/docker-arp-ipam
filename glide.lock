@@ -1,48 +1,39 @@
 hash: bc7d79b96ffc383c4aa87c984917e0a058c7447f3bc28e2194ff7f6c5952621f
-updated: 2016-08-26T14:25:16.135159505-04:00
+updated: 2017-04-14T16:56:26.131399295-04:00
 imports:
 - name: github.com/coreos/go-systemd
-  version: 5c49e4850c879a0ddc061e8f4adcf307de8a8bc2
+  version: 1f9909e51b2dab2487c26d64c8f2e7e580e4c9f5
   subpackages:
   - activation
-  - util
-- name: github.com/coreos/pkg
-  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
-  subpackages:
-  - dlopen
 - name: github.com/docker/go-connections
-  version: 0bad1a3951398f88ef4dd75fdb42af374430be89
+  version: e15c02316c12de00874640cd76311849de2aeed5
   subpackages:
   - sockets
 - name: github.com/docker/go-plugins-helpers
-  version: f3a3876798ee4f63bee3e7ee8911a2c27e7710b9
+  version: 8af45ff6ad5b7608853de51133c33e6638b02134
   subpackages:
   - ipam
   - sdk
 - name: github.com/Microsoft/go-winio
-  version: ce2922f643c8fd76b46cadc7f404a06282678b34
-- name: github.com/opencontainers/runc
-  version: c520720728515d546d8debe937ff489abf718b79
-  subpackages:
-  - libcontainer/user
+  version: fff283ad5116362ca252298cfc9b95828956d85d
 - name: github.com/Sirupsen/logrus
-  version: 08a8a7c27e3d058a8989316a850daad1c10bf4ab
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/TrilliumIT/iputil
   version: d4a109d78cb402591d86169c1520d3b3b56b97c2
 - name: github.com/urfave/cli
-  version: 168c95418e66e019fe17b8f4f5c45aa62ff80e23
+  version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/vishvananda/netlink
-  version: 63381f39fceb1c5c13503a90e1c2603caeafe3c5
+  version: 1d1fee5b1873b5396355214125b824ca3409c64a
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/net
-  version: 07b51741c1d6423d4a6abab1c49940ec09cb1aaf
+  version: 4876518f9e71663000c348837735820161a42df7
   subpackages:
   - proxy
 - name: golang.org/x/sys
-  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
   - windows

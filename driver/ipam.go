@@ -9,48 +9,30 @@ import (
 	"sync"
 )
 
+const candidateSize = 3
+
 type Driver struct {
 	ipam.Ipam
-	ncCh  chan<- *neighCheck       // Channel to request a neighbor check
-	ncUch chan<- *neighUseNotifier // Channel to close if neighbor becomes in use
-	sgCh  chan<- *addrSuggest      // Channel to request a suggested IP
-	quit  <-chan struct{}
+	ns         *NeighSubscription
+	candidates *candidateNets
+	quit       <-chan struct{}
 }
 
 func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
 	log.Debugf("NewDriver")
-
-	ncCh := make(chan *neighCheck)
-	ncUch := make(chan *neighUseNotifier)
-	sgCh := make(chan *addrSuggest)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(sgCh)
-		defer close(ncUch)
-		defer close(ncCh)
-		_ = <-quit
-	}()
-
-	d := &Driver{
-		ncCh:  ncCh,
-		ncUch: ncUch,
-		sgCh:  sgCh,
-		quit:  quit,
+	ns, err := NewNeighSubscription(quit)
+	if err != nil {
+		log.WithError(err).Error("Error setting up neighbor subscription")
+		return nil, err
 	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		checkNeigh(ncCh, ncUch, quit, wg)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		genSuggestions(sgCh, ncCh, ncUch, quit, wg)
-	}()
+	d := &Driver{
+		ns:   ns,
+		quit: quit,
+		candidates: &candidateNets{
+			nets: make(map[string]*candidateList),
+			quit: quit,
+		},
+	}
 	return d, nil
 }
 
@@ -91,23 +73,6 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 
 	if err := verifyLocalNet(n); err != nil {
 		return nil, err
-	}
-
-	addrs, err := netlink.AddrList(nil, netlink.FAMILY_ALL)
-	if err != nil {
-		log.Errorf("Error getting local addresses: %v", err)
-		return nil, err
-	}
-	innet := false
-	for _, addr := range addrs {
-		if n.Contains(addr.IP) {
-			innet = true
-			break
-		}
-	}
-	if !innet {
-		log.Errorf("Pool is not a local network: %v", n)
-		return nil, fmt.Errorf("Pool is not a local network")
 	}
 
 	return &ipam.RequestPoolResponse{
@@ -159,7 +124,6 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 
 	if r.Address != "" {
 		log.Debugf("Specific Address Requested: %v", r.Address)
-		probe(&n.IP)
 
 		addr := net.ParseIP(r.Address)
 		if addr == nil {
@@ -174,48 +138,26 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return res, nil
 		}
 
-		if tryAddress(&addr, d.ncCh) {
-			log.Errorf("Address already in use: %v", addr)
-			return nil, fmt.Errorf("Address already in use: %v", addr)
+		err := d.requestAddress(addr)
+		if err != nil {
+			log.WithError(err).Error("Error getting specific address")
+			return nil, err
 		}
+
 		ret_addr := net.IPNet{IP: addr, Mask: n.Mask}
 		res.Address = ret_addr.String()
 		return res, nil
 	}
 
 	log.Debugf("Random Address Requested in network %v", n)
-
-	ch := make(chan *net.IPNet)
-	defer close(ch)
-	ech := make(chan error)
-	defer close(ech)
-	d.sgCh <- &addrSuggest{
-		ipn: n,
-		ch:  ch,
-		ech: ech,
-	}
-	select {
-	case _ = <-d.quit:
-		return nil, fmt.Errorf("Shutting down")
-	case err := <-ech:
-		log.Errorf("Error getting random address")
+	ret_addr, err := d.getRandomUnusedAddr(n)
+	if err != nil {
+		log.WithError(err).Error("Error getting random address")
 		return nil, err
-	case ret_addr := <-ch:
-		res.Address = ret_addr.String()
 	}
+	res.Address = ret_addr.String()
+	log.WithField("Address", res.Address).Debug("Responding with address")
 	return res, nil
-}
-
-func tryAddress(ip *net.IP, ncCh chan<- *neighCheck) bool {
-	ch := make(chan bool)
-	defer close(ch)
-	nc := &neighCheck{
-		ip: ip,
-		ch: ch,
-	}
-	ncCh <- nc
-	res := <-ch
-	return res
 }
 
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {

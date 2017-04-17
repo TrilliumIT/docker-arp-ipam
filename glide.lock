@@ -1,5 +1,5 @@
 hash: bc7d79b96ffc383c4aa87c984917e0a058c7447f3bc28e2194ff7f6c5952621f
-updated: 2017-04-14T16:56:26.131399295-04:00
+updated: 2017-04-17T11:05:33.073015691-04:00
 imports:
 - name: github.com/coreos/go-systemd
   version: 1f9909e51b2dab2487c26d64c8f2e7e580e4c9f5
@@ -19,7 +19,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/TrilliumIT/iputil
-  version: d4a109d78cb402591d86169c1520d3b3b56b97c2
+  version: bd8d0991afc7eb3bc365a8799ba5e5573ecff2ec
 - name: github.com/urfave/cli
   version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/vishvananda/netlink

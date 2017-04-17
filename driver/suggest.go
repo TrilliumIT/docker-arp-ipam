@@ -41,6 +41,7 @@ func (cl *candidateList) pop() *net.IPNet {
 	defer cl.lock.Unlock()
 	for i, p := range cl.candidates {
 		if p != nil {
+			log.WithField("ip", p).Debug("Popping address from suggestions")
 			cl.candidates[i] = nil
 			return p
 		}
@@ -52,7 +53,7 @@ func (cl *candidateList) contains(ip net.IP) bool {
 	cl.lock.Lock()
 	defer cl.lock.Unlock()
 	for _, p := range cl.candidates {
-		if p.IP.Equal(ip) {
+		if p != nil && p.IP.Equal(ip) {
 			return true
 		}
 	}
@@ -146,6 +147,7 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *NeighSubscription) (*net.IPNet, er
 			continue
 		}
 		if !r {
+			log.WithField("IP", ip).Debug("Returning Random Address")
 			return &net.IPNet{IP: ip, Mask: n.Mask}, nil
 		}
 		log.WithField("ip", ip).Debug("Random address reachable, retrying")

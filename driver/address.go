@@ -97,13 +97,15 @@ func (ns *NeighSubscription) delSub(sub chan *netlink.Neigh) {
 	}()
 	defer ns.subLock.Unlock()
 
-	select {
-	case <-sub: // read pending messages to avoid deadlock while waiting for sublock
-	case <-lch:
-		for i, s := range ns.subscriptions {
-			if sub == s {
-				ns.subscriptions = append(ns.subscriptions[:i], ns.subscriptions[i+1:]...)
-				return
+	for {
+		select {
+		case <-sub: // read pending messages to avoid deadlock while waiting for sublock
+		case <-lch:
+			for i, s := range ns.subscriptions {
+				if sub == s {
+					ns.subscriptions = append(ns.subscriptions[:i], ns.subscriptions[i+1:]...)
+					return
+				}
 			}
 		}
 	}

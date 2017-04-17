@@ -9,10 +9,13 @@ import (
 	"sync"
 )
 
+const candidateSize = 3
+
 type Driver struct {
 	ipam.Ipam
-	ns   *NeighSubscription
-	quit <-chan struct{}
+	ns         *NeighSubscription
+	candidates *candidateNets
+	quit       <-chan struct{}
 }
 
 func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
@@ -25,6 +28,10 @@ func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
 	d := &Driver{
 		ns:   ns,
 		quit: quit,
+		candidates: &candidateNets{
+			nets: make(map[string]*candidateList),
+			quit: quit,
+		},
 	}
 	return d, nil
 }
@@ -149,6 +156,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 		return nil, err
 	}
 	res.Address = ret_addr.String()
+	log.WithField("Address", res.Address).Debug("Responding with address")
 	return res, nil
 }
 

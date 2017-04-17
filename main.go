@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	log "github.com/Sirupsen/logrus"
 	"github.com/TrilliumIT/docker-arp-ipam/driver"
 	"github.com/docker/go-plugins-helpers/ipam"
@@ -80,7 +79,7 @@ func Run(ctx *cli.Context) error {
 
 	h := ipam.NewHandler(d)
 	go func() {
-		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), &tls.Config{})
+		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
 	}()
 
 	<-done

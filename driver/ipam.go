@@ -14,6 +14,7 @@ type Driver struct {
 	ncCh  chan<- *neighCheck       // Channel to request a neighbor check
 	ncUch chan<- *neighUseNotifier // Channel to close if neighbor becomes in use
 	sgCh  chan<- *addrSuggest      // Channel to request a suggested IP
+	reqCh chan *addrReq
 	quit  <-chan struct{}
 }
 

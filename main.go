@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	log "github.com/Sirupsen/logrus"
 	"github.com/TrilliumIT/docker-arp-ipam/driver"
 	"github.com/docker/go-plugins-helpers/ipam"
@@ -17,7 +16,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "docker-arp-ipam"
 	app.Usage = "Docker ARP IPAM Plugin"
-	app.Version = "0.12"
+	app.Version = "0.13"
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "debug, d",

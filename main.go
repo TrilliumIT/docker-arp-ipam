@@ -7,6 +7,7 @@ import (
 	"github.com/urfave/cli"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 )
@@ -16,7 +17,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "docker-arp-ipam"
 	app.Usage = "Docker ARP IPAM Plugin"
-	app.Version = "0.13"
+	app.Version = "0.14"
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "debug, d",
@@ -63,6 +64,10 @@ func Run(ctx *cli.Context) error {
 		select {
 		case _ = <-c:
 			log.Debugf("Sigterm caught. Closing")
+			if log.GetLevel() == log.DebugLevel {
+				log.Debug("Dumping stack traces for all goroutines")
+				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			}
 		case err = <-ech:
 			log.Error(err)
 		}

@@ -63,8 +63,9 @@ func (cl *candidateList) contains(ip net.IP) bool {
 func (cl *candidateList) fill(n *net.IPNet, ns *NeighSubscription) {
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
-	uch := ns.addSub()
-	defer ns.delSub(uch)
+	sub := ns.addSub()
+	uch := sub.sub
+	defer sub.delSub()
 
 	for {
 		select {

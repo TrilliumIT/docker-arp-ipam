@@ -6,7 +6,6 @@ import (
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"net"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -42,8 +41,13 @@ func addrStatus(addr net.IP) (known, reachable bool, err error) {
 }
 
 type NeighSubscription struct {
-	subscriptions []chan *netlink.Neigh
-	subLock       sync.Mutex
+	subscriptions []*subscription
+	addSubCh      chan *subscription
+}
+
+type subscription struct {
+	sub   chan *netlink.Neigh
+	close chan struct{}
 }
 
 func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err error) {
@@ -55,8 +59,9 @@ func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err erro
 
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
-	uch := ns.addSub()
-	defer ns.delSub(uch)
+	sub := ns.addSub()
+	uch := sub.sub
+	defer sub.delSub()
 
 	probe(addr)
 	for {
@@ -79,40 +84,23 @@ func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err erro
 	}
 }
 
-func (ns *NeighSubscription) addSub() chan *netlink.Neigh {
-	sub := make(chan *netlink.Neigh, neighChanLen)
-	ns.subLock.Lock()
-	defer ns.subLock.Unlock()
-	ns.subscriptions = append(ns.subscriptions, sub)
+func (ns *NeighSubscription) addSub() *subscription {
+	sub := &subscription{
+		sub:   make(chan *netlink.Neigh, neighChanLen),
+		close: make(chan struct{}),
+	}
+	go func() { ns.addSubCh <- sub }()
 	return sub
 }
 
-func (ns *NeighSubscription) delSub(sub chan *netlink.Neigh) {
-	defer close(sub)
-	// Can't select on a lock, workaround by locking in a goroutine then selecting
-	lch := make(chan struct{})
-	go func() {
-		ns.subLock.Lock()
-		close(lch)
-	}()
-	defer ns.subLock.Unlock()
-
-	for {
-		select {
-		case <-sub: // read pending messages to avoid deadlock while waiting for sublock
-		case <-lch:
-			for i, s := range ns.subscriptions {
-				if sub == s {
-					ns.subscriptions = append(ns.subscriptions[:i], ns.subscriptions[i+1:]...)
-					return
-				}
-			}
-		}
-	}
+func (sub *subscription) delSub() {
+	close(sub.close)
 }
 
 func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
-	ns := &NeighSubscription{}
+	ns := &NeighSubscription{
+		addSubCh: make(chan *subscription),
+	}
 
 	s, err := nl.Subscribe(syscall.NETLINK_ROUTE, syscall.RTNLGRP_NEIGH)
 	if err != nil {
@@ -136,11 +124,21 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 				if err != nil {
 					log.Errorf("Error deserializing neighbor message %v", m.Data)
 				}
-				ns.subLock.Lock()
-				for _, ch := range ns.subscriptions {
-					ch <- n
+				// Add new subscriptions
+				for sub := range ns.addSubCh {
+					ns.subscriptions = append(ns.subscriptions, sub)
 				}
-				ns.subLock.Unlock()
+				for i, sub := range ns.subscriptions {
+					select {
+					// Delete closed subscriptions
+					case <-sub.close:
+						ns.subscriptions = append(ns.subscriptions[:i], ns.subscriptions[i+1:]...)
+						close(sub.sub)
+					// Send the update
+					default:
+						sub.sub <- n
+					}
+				}
 			}
 		}
 	}()

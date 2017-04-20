@@ -17,7 +17,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "docker-arp-ipam"
 	app.Usage = "Docker ARP IPAM Plugin"
-	app.Version = "0.15"
+	app.Version = "0.16"
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "debug, d",

@@ -57,6 +57,7 @@ func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err erro
 	}
 
 	t := time.NewTicker(3 * time.Second)
+	to := time.Now().Add(10 * time.Second)
 	defer t.Stop()
 	sub := ns.addSub()
 	uch := sub.sub
@@ -73,10 +74,13 @@ func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err erro
 			if err != nil || known {
 				return
 			}
-		case <-t.C:
+		case n := <-t.C:
 			known, reachable, err = addrStatus(addr)
 			if err != nil || known {
 				return
+			}
+			if n.After(to) {
+				return true, fmt.Errorf("Error determining reachability for %v", addr)
 			}
 			probe(addr)
 		}
@@ -125,8 +129,14 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 					log.Errorf("Error deserializing neighbor message %v", m.Data)
 				}
 				// Add new subscriptions
-				for sub := range ns.addSubCh {
-					subscriptions = append(subscriptions, sub)
+				for {
+					select {
+					case sub := <-ns.addSubCh:
+						subscriptions = append(subscriptions, sub)
+						continue
+					default:
+					}
+					break
 				}
 				for i, sub := range subscriptions {
 					select {

@@ -17,8 +17,9 @@ type candidateNets struct {
 
 type candidateList struct {
 	candidates [candidateSize]*net.IPNet
-	lock       sync.Mutex
 	quit       <-chan struct{}
+	popCh      chan chan *net.IPNet
+	addCh      chan *net.IPNet
 }
 
 // Does nothing if net already exists
@@ -36,28 +37,11 @@ func (cn *candidateNets) addNet(n *net.IPNet, ns *NeighSubscription) *candidateL
 	return cl
 }
 
-func (cl *candidateList) pop() *net.IPNet {
-	cl.lock.Lock()
-	defer cl.lock.Unlock()
-	for i, p := range cl.candidates {
-		if p != nil {
-			log.WithField("ip", p).Debug("Popping address from suggestions")
-			cl.candidates[i] = nil
-			return p
-		}
-	}
-	return nil
-}
-
-func (cl *candidateList) contains(ip net.IP) bool {
-	cl.lock.Lock()
-	defer cl.lock.Unlock()
-	for _, p := range cl.candidates {
-		if p != nil && p.IP.Equal(ip) {
-			return true
-		}
-	}
-	return false
+func (cl *candidateList) pop(ns *NeighSubscription) *net.IPNet {
+	pc := make(chan *net.IPNet)
+	defer close(pc)
+	cl.popCh <- pc
+	return <-pc
 }
 
 func (cl *candidateList) fill(n *net.IPNet, ns *NeighSubscription) {
@@ -67,18 +51,39 @@ func (cl *candidateList) fill(n *net.IPNet, ns *NeighSubscription) {
 	uch := sub.sub
 	defer sub.delSub()
 
+mainLoop:
 	for {
 		select {
-		case n := <-uch:
-			if !cl.contains(n.IP) {
-				continue
+		case pc := <-cl.popCh: // pop a suggested address
+			for i, p := range cl.candidates {
+				if p != nil {
+					log.WithField("ip", p).Debug("Popping address from suggestions")
+					cl.candidates[i] = nil
+					pc <- p
+				}
 			}
-		case <-t.C:
+			go func() {
+				r, err := getNewRandomUnusedAddr(n, ns)
+				if err != nil {
+					log.WithError(err).Error("Error getting new random candidate address for pop")
+					pc <- nil
+				}
+				pc <- r
+			}()
+			continue mainLoop
 		case <-cl.quit:
 			return
+		case n := <-uch: // We got an update from the arp table
+			for _, p := range cl.candidates { // Only do something if it is an ip we care about
+				if p != nil && p.IP.Equal(n.IP) {
+					continue mainLoop
+				}
+			}
+			break
+		case <-t.C: // need to refresh because the timer ticked
+			break
 		}
 
-		cl.lock.Lock()
 		for i, p := range cl.candidates {
 			if p == nil {
 				continue
@@ -105,13 +110,12 @@ func (cl *candidateList) fill(n *net.IPNet, ns *NeighSubscription) {
 				log.WithError(err).Error("Error getting new random candidate address")
 			}
 		}
-		cl.lock.Unlock()
 	}
 }
 
 func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
 	cl := d.candidates.addNet(n, d.ns)
-	r := cl.pop()
+	r := cl.pop(d.ns)
 	if r != nil {
 		return r, nil
 	}

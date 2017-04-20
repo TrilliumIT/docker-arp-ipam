@@ -41,8 +41,7 @@ func addrStatus(addr net.IP) (known, reachable bool, err error) {
 }
 
 type NeighSubscription struct {
-	subscriptions []*subscription
-	addSubCh      chan *subscription
+	addSubCh chan *subscription
 }
 
 type subscription struct {
@@ -99,7 +98,7 @@ func (sub *subscription) delSub() {
 
 func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 	ns := &NeighSubscription{
-		addSubCh: make(chan *subscription),
+		addSubCh: make(chan *subscription, 64),
 	}
 
 	s, err := nl.Subscribe(syscall.NETLINK_ROUTE, syscall.RTNLGRP_NEIGH)
@@ -113,6 +112,7 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 	}()
 
 	go func() {
+		subscriptions := []*subscription{}
 		for {
 			msgs, err := s.Receive()
 			if err != nil {
@@ -126,13 +126,13 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 				}
 				// Add new subscriptions
 				for sub := range ns.addSubCh {
-					ns.subscriptions = append(ns.subscriptions, sub)
+					subscriptions = append(subscriptions, sub)
 				}
-				for i, sub := range ns.subscriptions {
+				for i, sub := range subscriptions {
 					select {
 					// Delete closed subscriptions
 					case <-sub.close:
-						ns.subscriptions = append(ns.subscriptions[:i], ns.subscriptions[i+1:]...)
+						subscriptions = append(subscriptions[:i], subscriptions[i+1:]...)
 						close(sub.sub)
 					// Send the update
 					default:

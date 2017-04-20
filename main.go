@@ -12,12 +12,14 @@ import (
 	"syscall"
 )
 
+const version = "0.19"
+
 func main() {
 
 	app := cli.NewApp()
 	app.Name = "docker-arp-ipam"
 	app.Usage = "Docker ARP IPAM Plugin"
-	app.Version = "0.18"
+	app.Version = version
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "debug, d",
@@ -49,6 +51,7 @@ func Run(ctx *cli.Context) error {
 		DisableTimestamp: false,
 		FullTimestamp:    true,
 	})
+	log.WithField("Version", version).Info("Starting")
 
 	quit := make(chan struct{}) // tells other goroutines to quit
 	var wg sync.WaitGroup       // waits for goroutines to quit

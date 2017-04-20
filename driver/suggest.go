@@ -78,6 +78,7 @@ mainLoop:
 					cl.candidates[i] = ip
 				}
 			}
+			continue mainLoop
 		case ip := <-cl.delCh:
 			for i, p := range cl.candidates {
 				if p.IP.Equal(ip.IP) {
@@ -93,6 +94,7 @@ mainLoop:
 					continue mainLoop
 				}
 			}
+			continue mainLoop
 		case <-cl.quit:
 			return
 		case n := <-uch: // We got an update from the arp table

@@ -138,11 +138,14 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 					}
 					break
 				}
-				for i, sub := range subscriptions {
+				l := len(subscriptions)
+				for i := range subscriptions {
+					j := l - i - 1 // loop in reverse order
+					sub := subscriptions[j]
 					select {
 					// Delete closed subscriptions
 					case <-sub.close:
-						subscriptions = append(subscriptions[:i], subscriptions[i+1:]...)
+						subscriptions = append(subscriptions[:j], subscriptions[j+1:]...)
 						close(sub.sub)
 					// Send the update
 					default:

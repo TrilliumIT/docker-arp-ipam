@@ -20,6 +20,7 @@ type candidateList struct {
 	quit       <-chan struct{}
 	popCh      chan chan *net.IPNet
 	addCh      chan *net.IPNet
+	delCh      chan *net.IPNet
 }
 
 // Does nothing if net already exists
@@ -71,6 +72,27 @@ mainLoop:
 				pc <- r
 			}()
 			continue mainLoop
+		case ip := <-cl.addCh:
+			for i, p := range cl.candidates {
+				if p == nil {
+					cl.candidates[i] = ip
+				}
+			}
+		case ip := <-cl.delCh:
+			for i, p := range cl.candidates {
+				if p.IP.Equal(ip.IP) {
+					cl.candidates[i] = nil
+					go func() {
+						addr, err := getNewRandomUnusedAddr(n, ns)
+						if err != nil {
+							log.WithError(err).Error("Error getting new random address.")
+							return
+						}
+						cl.addCh <- addr
+					}()
+					continue mainLoop
+				}
+			}
 		case <-cl.quit:
 			return
 		case n := <-uch: // We got an update from the arp table
@@ -84,31 +106,22 @@ mainLoop:
 			break
 		}
 
-		for i, p := range cl.candidates {
+		for _, p := range cl.candidates {
 			if p == nil {
 				continue
 			}
-			r, err := ns.probeAndWait(p.IP)
-			if err != nil {
-				log.WithError(err).WithField("ip", p).Error("Error probing candidate IP")
-				cl.candidates[i] = nil
-				continue
-			}
-			if r {
-				log.WithField("ip", p).Debug("Candidate IP in use")
-				cl.candidates[i] = nil
-				continue
-			}
-		}
-		for i, p := range cl.candidates {
-			if p != nil {
-				continue
-			}
-			var err error
-			cl.candidates[i], err = getNewRandomUnusedAddr(n, ns)
-			if err != nil {
-				log.WithError(err).Error("Error getting new random candidate address")
-			}
+			go func() {
+				r, err := ns.probeAndWait(p.IP)
+				if err != nil {
+					log.WithError(err).WithField("ip", p).Error("Error probing candidate IP")
+					cl.delCh <- p
+					return
+				}
+				if r {
+					log.WithField("ip", p).Debug("Candidate IP in use")
+					cl.delCh <- p
+				}
+			}()
 		}
 	}
 }

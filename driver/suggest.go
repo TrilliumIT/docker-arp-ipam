@@ -31,7 +31,10 @@ func (cn *candidateNets) addNet(n *net.IPNet, ns *NeighSubscription) *candidateL
 		return cl
 	}
 	cl := &candidateList{
-		quit: cn.quit,
+		quit:  cn.quit,
+		popCh: make(chan chan *net.IPNet),
+		addCh: make(chan *net.IPNet),
+		delCh: make(chan *net.IPNet),
 	}
 	go cl.fill(n, ns)
 	cn.nets[n.String()] = cl

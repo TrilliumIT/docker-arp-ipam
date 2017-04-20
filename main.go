@@ -12,7 +12,7 @@ import (
 	"syscall"
 )
 
-const version = "0.19"
+const version = "0.20"
 
 func main() {
 

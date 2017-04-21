@@ -25,7 +25,7 @@ type candidateList struct {
 }
 
 // Does nothing if net already exists
-func (cn *candidateNets) addNet(n *net.IPNet, ns *NeighSubscription) *candidateList {
+func (cn *candidateNets) addNet(n *net.IPNet, ns *neighSubscription) *candidateList {
 	cn.lock.Lock()
 	defer cn.lock.Unlock()
 	if cl, ok := cn.nets[n.String()]; ok {
@@ -42,14 +42,14 @@ func (cn *candidateNets) addNet(n *net.IPNet, ns *NeighSubscription) *candidateL
 	return cl
 }
 
-func (cl *candidateList) pop(ns *NeighSubscription) *net.IPNet {
+func (cl *candidateList) pop(ns *neighSubscription) *net.IPNet {
 	pc := make(chan *net.IPNet)
 	defer close(pc)
 	cl.popCh <- pc
 	return <-pc
 }
 
-func (cl *candidateList) fill(n *net.IPNet, ns *NeighSubscription) {
+func (cl *candidateList) fill(n *net.IPNet, ns *neighSubscription) {
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	uch := make(chan *netlink.Neigh)
@@ -122,7 +122,7 @@ mainLoop:
 	}
 }
 
-func sendRandomUnusedAddress(n *net.IPNet, ns *NeighSubscription, c chan<- *net.IPNet) {
+func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, c chan<- *net.IPNet) {
 	addr, err := getNewRandomUnusedAddr(n, ns)
 	if err != nil {
 		log.WithError(err).Error("Error getting new random address.")
@@ -145,7 +145,7 @@ func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
 	return r, nil
 }
 
-func getNewRandomUnusedAddr(n *net.IPNet, ns *NeighSubscription) (*net.IPNet, error) {
+func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription) (*net.IPNet, error) {
 	log.Debugf("Generating Random Address in network %v", n)
 	tried := make(map[string]struct{})
 	var e struct{}

@@ -2,25 +2,28 @@ package driver
 
 import (
 	"fmt"
+	"net"
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/vishvananda/netlink"
-	"net"
-	"sync"
 )
 
 const candidateSize = 3
 
+// Driver is the main driver object for the plugin
 type Driver struct {
 	ipam.Ipam
-	ns         *NeighSubscription
+	ns         *neighSubscription
 	candidates *candidateNets
 	quit       <-chan struct{}
 }
 
+// NewDriver returns a driver object
 func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
 	log.Debugf("NewDriver")
-	ns, err := NewNeighSubscription(quit)
+	ns, err := newNeighSubscription(quit)
 	if err != nil {
 		log.WithError(err).Error("Error setting up neighbor subscription")
 		return nil, err
@@ -36,6 +39,7 @@ func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
 	return d, nil
 }
 
+// GetCapabilities is what docker calls when initially connecting
 func (d *Driver) GetCapabilities() (*ipam.CapabilitiesResponse, error) {
 	log.Debugf("GetCapabilities")
 	return &ipam.CapabilitiesResponse{
@@ -43,6 +47,7 @@ func (d *Driver) GetCapabilities() (*ipam.CapabilitiesResponse, error) {
 	}, nil
 }
 
+// GetDefaultAddressSpaces returns the default address spaces
 func (d *Driver) GetDefaultAddressSpaces() (*ipam.AddressSpacesResponse, error) {
 	log.Debugf("GetDefaultAddressSpaces")
 	return &ipam.AddressSpacesResponse{
@@ -51,6 +56,7 @@ func (d *Driver) GetDefaultAddressSpaces() (*ipam.AddressSpacesResponse, error) 
 	}, nil
 }
 
+// RequestPool requests a pool from the driver
 func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolResponse, error) {
 	log.Debugf("RequestPool: %v", r)
 	if r.Pool == "" {
@@ -59,11 +65,11 @@ func (d *Driver) RequestPool(r *ipam.RequestPoolRequest) (*ipam.RequestPoolRespo
 	}
 	if r.V6 {
 		log.Errorf("Automatic V6 pool assignment not supported.")
-		return nil, fmt.Errorf("Automatic V6 pool assignment not supported.")
+		return nil, fmt.Errorf("automatic V6 pool assignment not supported")
 	}
 	if r.SubPool != "" {
 		log.Errorf("SubPool not supported.")
-		return nil, fmt.Errorf("SubPool not supported.")
+		return nil, fmt.Errorf("subPool not supported")
 	}
 	n, err := netlink.ParseIPNet(r.Pool)
 	if err != nil {

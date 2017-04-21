@@ -2,12 +2,13 @@ package driver
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netlink/nl"
 	"net"
 	"syscall"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 )
 
 const neighChanLen = 256
@@ -40,7 +41,7 @@ func addrStatus(addr net.IP) (known, reachable bool, err error) {
 	return
 }
 
-type NeighSubscription struct {
+type neighSubscription struct {
 	addSubCh chan *subscription
 }
 
@@ -50,7 +51,7 @@ type subscription struct {
 	close chan struct{}
 }
 
-func (ns *NeighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
+func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
 	var known bool
 	known, reachable, err = addrStatus(addr.IP)
 	if err != nil || known {
@@ -88,7 +89,7 @@ func (ns *NeighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 	}
 }
 
-func (ns *NeighSubscription) addSub(ip *net.IPNet) *subscription {
+func (ns *neighSubscription) addSub(ip *net.IPNet) *subscription {
 	sub := &subscription{
 		ip:    ip,
 		sub:   make(chan *netlink.Neigh, neighChanLen),
@@ -102,8 +103,8 @@ func (sub *subscription) delSub() {
 	close(sub.close)
 }
 
-func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
-	ns := &NeighSubscription{
+func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
+	ns := &neighSubscription{
 		addSubCh: make(chan *subscription, 64),
 	}
 

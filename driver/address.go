@@ -12,7 +12,7 @@ import (
 
 const neighChanLen = 256
 
-func (d *Driver) requestAddress(addr net.IP) error {
+func (d *Driver) requestAddress(addr *net.IPNet) error {
 	r, err := d.ns.probeAndWait(addr)
 	if err != nil {
 		log.WithError(err).Fatal("Error determining if addr is reachable")
@@ -45,13 +45,14 @@ type NeighSubscription struct {
 }
 
 type subscription struct {
+	ip    *net.IPNet
 	sub   chan *netlink.Neigh
 	close chan struct{}
 }
 
-func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err error) {
+func (ns *NeighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
 	var known bool
-	known, reachable, err = addrStatus(addr)
+	known, reachable, err = addrStatus(addr.IP)
 	if err != nil || known {
 		return
 	}
@@ -59,36 +60,37 @@ func (ns *NeighSubscription) probeAndWait(addr net.IP) (reachable bool, err erro
 	t := time.NewTicker(3 * time.Second)
 	to := time.Now().Add(10 * time.Second)
 	defer t.Stop()
-	sub := ns.addSub()
+	sub := ns.addSub(addr)
 	uch := sub.sub
 	defer sub.delSub()
 
-	probe(addr)
+	probe(addr.IP)
 	for {
 		select {
 		case n := <-uch:
-			if !n.IP.Equal(addr) {
+			if !n.IP.Equal(addr.IP) {
 				continue
 			}
-			known, reachable, err = addrStatus(addr)
+			known, reachable, err = addrStatus(addr.IP)
 			if err != nil || known {
 				return
 			}
 		case n := <-t.C:
-			known, reachable, err = addrStatus(addr)
+			known, reachable, err = addrStatus(addr.IP)
 			if err != nil || known {
 				return
 			}
 			if n.After(to) {
 				return true, fmt.Errorf("Error determining reachability for %v", addr)
 			}
-			probe(addr)
+			probe(addr.IP)
 		}
 	}
 }
 
-func (ns *NeighSubscription) addSub() *subscription {
+func (ns *NeighSubscription) addSub(ip *net.IPNet) *subscription {
 	sub := &subscription{
+		ip:    ip,
 		sub:   make(chan *netlink.Neigh, neighChanLen),
 		close: make(chan struct{}),
 	}
@@ -149,7 +151,9 @@ func NewNeighSubscription(quit <-chan struct{}) (*NeighSubscription, error) {
 						close(sub.sub)
 					// Send the update
 					default:
-						sub.sub <- n
+						if sub.ip.IP.Equal(n.IP) {
+							sub.sub <- n
+						}
 					}
 				}
 			}

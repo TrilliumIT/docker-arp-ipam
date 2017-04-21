@@ -64,6 +64,7 @@ mainLoop:
 					log.WithField("ip", p).Debug("Popping address from suggestions")
 					cl.candidates[i] = nil
 					pc <- p
+					continue mainLoop
 				}
 			}
 			go func() {
@@ -79,6 +80,7 @@ mainLoop:
 			for i, p := range cl.candidates {
 				if p == nil {
 					cl.candidates[i] = ip
+					continue mainLoop
 				}
 			}
 			continue mainLoop

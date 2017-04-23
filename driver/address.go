@@ -25,24 +25,23 @@ func (d *Driver) tryAddress(addr *net.IPNet) error {
 	return nil
 }
 
-func addrStatus(addr net.IP) (known, reachable bool, err error) {
-	var neighs []netlink.Neigh
-	neighs, err = netlink.NeighList(0, netlink.FAMILY_V4)
-	if err != nil {
+func (ns *neighSubscription) addrStatus(addr net.IP) (known, reachable bool) {
+	n := ns.check(addr)
+	return parseAddrStatus(n)
+}
+
+func parseAddrStatus(n *netlink.Neigh) (known, reachable bool) {
+	if n != nil {
+		known = n.State == netlink.NUD_FAILED || n.State == netlink.NUD_REACHABLE
+		reachable = known && n.State != netlink.NUD_FAILED
 		return
-	}
-	for _, n := range neighs {
-		if n.IP.Equal(addr) {
-			known = n.State == netlink.NUD_FAILED || n.State == netlink.NUD_REACHABLE
-			reachable = known && n.State != netlink.NUD_FAILED
-			return
-		}
 	}
 	return
 }
 
 type neighSubscription struct {
 	addSubCh chan *subscription
+	checkCh  chan *neighCheckReq
 }
 
 type subscription struct {
@@ -53,39 +52,35 @@ type subscription struct {
 
 func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
 	var known bool
-	known, reachable, err = addrStatus(addr.IP)
-	if err != nil || known {
+	known, reachable = ns.addrStatus(addr.IP)
+	if known {
 		return
 	}
 
-	t := time.NewTicker(3 * time.Second)
-	to := time.Now().Add(10 * time.Second)
+	t := time.NewTicker(1 * time.Second)
+	to := time.Now().Add(5 * time.Second)
 	defer t.Stop()
 	sub := ns.addSub(addr)
-	uch := sub.sub
 	defer sub.delSub()
 
 	probe(addr.IP)
 	for {
 		select {
-		case n := <-uch:
-			if !n.IP.Equal(addr.IP) {
-				continue
-			}
-			known, reachable, err = addrStatus(addr.IP)
-			if err != nil || known {
+		case n := <-sub.sub:
+			known, reachable = parseAddrStatus(n)
+			if known {
 				return
 			}
-		case n := <-t.C:
-			known, reachable, err = addrStatus(addr.IP)
-			if err != nil || known {
-				return
-			}
-			if n.After(to) {
-				return true, fmt.Errorf("Error determining reachability for %v", addr)
-			}
-			probe(addr.IP)
+		case <-t.C:
 		}
+		known, reachable = ns.addrStatus(addr.IP)
+		if known {
+			return
+		}
+		if time.Now().After(to) {
+			return true, fmt.Errorf("Error determining reachability for %v", addr)
+		}
+		probe(addr.IP)
 	}
 }
 
@@ -103,9 +98,20 @@ func (sub *subscription) delSub() {
 	close(sub.close)
 }
 
+type neighCheckReq struct {
+	ip    net.IP
+	retCh chan *netlink.Neigh
+}
+
+type neighUpdate struct {
+	time  time.Time
+	neigh *netlink.Neigh
+}
+
 func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 	ns := &neighSubscription{
-		addSubCh: make(chan *subscription, 64),
+		addSubCh: make(chan *subscription),
+		checkCh:  make(chan *neighCheckReq),
 	}
 
 	s, err := nl.Subscribe(syscall.NETLINK_ROUTE, syscall.RTNLGRP_NEIGH)
@@ -118,50 +124,120 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 		s.Close()
 	}()
 
+	neighSubCh := make(chan []*neighUpdate, neighChanLen)
 	go func() {
-		subscriptions := []*subscription{}
 		for {
-			msgs, err := s.Receive()
-			if err != nil {
-				log.WithError(err).Error("Error recieving neighbor update")
-				return
-			}
-			for _, m := range msgs {
-				n, err := netlink.NeighDeserialize(m.Data)
+			for {
+				msgs, err := s.Receive()
 				if err != nil {
-					log.Errorf("Error deserializing neighbor message %v", m.Data)
+					log.WithError(err).Error("Error recieving neighbor update")
 				}
-				// Add new subscriptions
-				for {
-					select {
-					case sub := <-ns.addSubCh:
-						subscriptions = append(subscriptions, sub)
-						continue
-					default:
-					}
-					break
-				}
-				l := len(subscriptions)
-				for i := range subscriptions {
-					j := l - i - 1 // loop in reverse order
-					sub := subscriptions[j]
-					select {
-					// Delete closed subscriptions
-					case <-sub.close:
-						subscriptions = append(subscriptions[:j], subscriptions[j+1:]...)
-						close(sub.sub)
-					// Send the update
-					default:
-						if sub.ip.IP.Equal(n.IP) {
-							sub.sub <- n
+				t := time.Now()
+				go func(t time.Time) {
+					var ns []*neighUpdate
+					for _, m := range msgs {
+						n, err := netlink.NeighDeserialize(m.Data)
+						if err != nil {
+							log.Errorf("Error deserializing neighbor message %v", m.Data)
+							continue
 						}
+						ns = append(ns, &neighUpdate{
+							time:  t,
+							neigh: n,
+						})
+					}
+					neighSubCh <- ns
+				}(t)
+			}
+		}
+	}()
+
+	neighs := make(neighbors)
+	subs := make(map[string][]*subscription)
+	tick := time.NewTicker(3 * time.Second)
+	go func() {
+		for {
+			// Always add subs before listening for updates
+			select {
+			case sub := <-ns.addSubCh:
+				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
+				continue
+			default:
+			}
+
+			select {
+			case sub := <-ns.addSubCh:
+				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
+				continue
+			case <-tick.C:
+				neighList, err := netlink.NeighList(0, netlink.FAMILY_V4)
+				t := time.Now()
+				if err != nil {
+					log.WithError(err).Error("Error refreshing neighbor table.")
+					continue
+				}
+				for _, n := range neighList {
+					on := neighs[n.IP.String()]
+					if on == nil || (on.neigh.State != n.State && on.time.Before(t)) {
+						neighs[n.IP.String()] = &neighUpdate{
+							time:  t,
+							neigh: &n,
+						}
+						neighs.update(&n, subs[n.IP.String()])
 					}
 				}
+				continue
+			case neighList := <-neighSubCh:
+				for _, n := range neighList {
+					on := neighs[n.neigh.IP.String()]
+					if on == nil || (on.neigh.State != n.neigh.State && on.time.Before(n.time)) {
+						neighs.update(n.neigh, subs[n.neigh.IP.String()])
+					}
+				}
+				continue
+			case nc := <-ns.checkCh:
+				r := neighs[nc.ip.String()]
+				if r != nil {
+					nc.retCh <- r.neigh
+					continue
+				}
+				nc.retCh <- nil
+				continue
 			}
 		}
 	}()
 
 	return ns, nil
+}
+
+func (ns *neighSubscription) check(ip net.IP) *netlink.Neigh {
+	nc := &neighCheckReq{
+		ip:    ip,
+		retCh: make(chan *netlink.Neigh),
+	}
+	ns.checkCh <- nc
+	return <-nc.retCh
+}
+
+type neighbors map[string]*neighUpdate
+
+func (neighs neighbors) update(n *netlink.Neigh, subs []*subscription) {
+	l := len(subs)
+	for i := range subs {
+		j := l - i - 1 // loop in reverse order
+		sub := subs[j]
+		select {
+		// Delete closed subs
+		case <-sub.close:
+			subs = append(subs[:j], subs[j+1:]...)
+			close(sub.sub)
+		// Send the update
+		default:
+			go func(sub *subscription) {
+				sub.sub <- n
+			}(sub)
+		}
+	}
 }
 
 func probe(ip net.IP) {

@@ -129,7 +129,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 		return ret, err
 	case <-t.C:
 		log.Error("RequestAddress timed out.")
-		return nil, fmt.Errorf("RequestAddress timed out.")
+		return nil, fmt.Errorf("request address timed out")
 	}
 }
 

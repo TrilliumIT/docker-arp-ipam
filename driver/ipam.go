@@ -3,7 +3,6 @@ package driver
 import (
 	"fmt"
 	"net"
-	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
@@ -21,7 +20,7 @@ type Driver struct {
 }
 
 // NewDriver returns a driver object
-func NewDriver(quit <-chan struct{}, wg sync.WaitGroup) (*Driver, error) {
+func NewDriver(quit <-chan struct{}) (*Driver, error) {
 	log.Debugf("NewDriver")
 	ns, err := newNeighSubscription(quit)
 	if err != nil {
@@ -107,12 +106,15 @@ func verifyLocalNet(n *net.IPNet) error {
 	return nil
 }
 
+// ReleasePool releases a pool
 func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
 	log.Debugf("ReleasePool: %v", r)
 	return nil
 }
 
+// RequestAddress requests an address
 func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
+	//todo add a timeout
 	log.Debugf("RequestAddress: %v", r)
 
 	n, err := netlink.ParseIPNet(r.PoolID)
@@ -122,7 +124,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 		return nil, err
 	}
 
-	if err := verifyLocalNet(n); err != nil {
+	if err = verifyLocalNet(n); err != nil {
 		return nil, err
 	}
 
@@ -143,7 +145,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return res, nil
 		}
 
-		err := d.requestAddress(addr)
+		err = d.requestAddress(addr)
 		if err != nil {
 			log.WithError(err).Error("Error getting specific address")
 			return nil, err
@@ -154,16 +156,17 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	}
 
 	log.Debugf("Random Address Requested in network %v", n)
-	ret_addr, err := d.getRandomUnusedAddr(n)
+	retAddr, err := d.getRandomUnusedAddr(n)
 	if err != nil {
 		log.WithError(err).Error("Error getting random address")
 		return nil, err
 	}
-	res.Address = ret_addr.String()
+	res.Address = retAddr.String()
 	log.WithField("Address", res.Address).Debug("Responding with address")
 	return res, nil
 }
 
+// ReleaseAddress releases an assigned address
 func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {
 	log.Debugf("ReleaseAddress: %v", r)
 	ip := net.ParseIP(r.Address)
@@ -177,7 +180,7 @@ func (d *Driver) ReleaseAddress(r *ipam.ReleaseAddressRequest) error {
 		if ip.Equal(n.IP) {
 			err := netlink.NeighDel(&n)
 			if err != nil {
-				log.WithError(err).Error("Failed to delete arp entry for %v", ip)
+				log.WithError(err).WithField("ip", ip).Error("Failed to delete arp entry.")
 			}
 			return err
 		}

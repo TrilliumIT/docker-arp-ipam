@@ -1,15 +1,16 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/TrilliumIT/docker-arp-ipam/driver"
-	"github.com/docker/go-plugins-helpers/ipam"
-	"github.com/urfave/cli"
 	"os"
 	"os/signal"
 	"runtime/pprof"
 	"sync"
 	"syscall"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/docker-arp-ipam/driver"
+	"github.com/docker/go-plugins-helpers/ipam"
+	"github.com/urfave/cli"
 )
 
 const version = "0.20"
@@ -37,7 +38,10 @@ func main() {
 		},
 	}
 	app.Action = Run
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.WithError(err).Fatal("Error from app")
+	}
 }
 
 // Run initializes the driver
@@ -65,11 +69,13 @@ func Run(ctx *cli.Context) error {
 	signal.Notify(c, syscall.SIGTERM)
 	go func() {
 		select {
-		case _ = <-c:
+		case <-c:
 			log.Debugf("Sigterm caught. Closing")
 			if log.GetLevel() == log.DebugLevel {
 				log.Debug("Dumping stack traces for all goroutines")
-				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+				if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+					log.WithError(err).Error("Error getting stack trace")
+				}
 			}
 		case err = <-ech:
 			log.Error(err)
@@ -79,7 +85,7 @@ func Run(ctx *cli.Context) error {
 		close(done)
 	}()
 
-	d, err := driver.NewDriver(quit, wg)
+	d, err := driver.NewDriver(quit)
 	if err != nil {
 		log.Error("Error initializing driver")
 		ech <- err

@@ -167,10 +167,14 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 func probe(ip net.IP) {
 	conn, err := net.Dial("udp", ip.String()+":8765")
 	if err != nil {
-		log.Error(err)
+		log.WithError(err).WithField("ip", ip).Error("Error creating probe connection.")
 		return
 	}
-	defer conn.Close()
-	conn.Write([]byte("probe"))
+	if _, err := conn.Write([]byte("probe")); err != nil {
+		log.WithError(err).WithField("ip", ip).Error("Error probing connection.")
+	}
+	if err := conn.Close(); err != nil {
+		log.WithError(err).WithField("ip", ip).Error("Error clossing probe connection.")
+	}
 	return
 }

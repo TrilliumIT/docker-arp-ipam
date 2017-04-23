@@ -2,12 +2,13 @@ package driver
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/TrilliumIT/iputil"
-	"github.com/vishvananda/netlink"
 	"net"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/iputil"
+	"github.com/vishvananda/netlink"
 )
 
 type candidateNets struct {
@@ -97,16 +98,14 @@ mainLoop:
 		case <-cl.quit:
 			return
 		case <-uch: // We got an update from the arp table
-			break
 		case <-t.C: // need to refresh because the timer ticked
-			break
 		}
 
 		for _, p := range cl.candidates {
 			if p == nil {
 				go sendRandomUnusedAddress(n, ns, cl.addCh)
 			}
-			go func() {
+			go func(p *subscription) {
 				r, err := ns.probeAndWait(p.ip)
 				if err != nil {
 					log.WithError(err).WithField("ip", p).Error("Error probing candidate IP")
@@ -117,7 +116,7 @@ mainLoop:
 					log.WithField("ip", p).Debug("Candidate IP in use")
 					cl.delCh <- p.ip
 				}
-			}()
+			}(p)
 		}
 	}
 }

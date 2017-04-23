@@ -115,6 +115,7 @@ func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
 
 // RequestAddress requests an address
 func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
+	st := time.Now()
 	t := time.NewTimer(10 * time.Second)
 	retCh := make(chan *ipam.RequestAddressResponse)
 	errCh := make(chan error)
@@ -126,6 +127,12 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	select {
 	case ret := <-retCh:
 		err := <-errCh
+		if err != nil {
+			log.WithError(err).WithField("Time", time.Now().Sub(st).String()).Error("Error serving RequestAddress")
+		}
+		if ret != nil {
+			log.WithField("Address", ret.Address).WithField("Time", time.Now().Sub(st).String()).Debug("RequestAddress served")
+		}
 		return ret, err
 	case <-t.C:
 		log.Error("RequestAddress timed out.")

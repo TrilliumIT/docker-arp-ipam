@@ -3,6 +3,7 @@ package driver
 import (
 	"fmt"
 	"net"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
@@ -114,6 +115,26 @@ func (d *Driver) ReleasePool(r *ipam.ReleasePoolRequest) error {
 
 // RequestAddress requests an address
 func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
+	t := time.NewTimer(10 * time.Second)
+	retCh := make(chan *ipam.RequestAddressResponse)
+	errCh := make(chan error)
+	go func() {
+		ret, err := d.requestAddress(r)
+		retCh <- ret
+		errCh <- err
+	}()
+	select {
+	case ret := <-retCh:
+		err := <-errCh
+		return ret, err
+	case <-t.C:
+		log.Error("RequestAddress timed out.")
+		return nil, fmt.Errorf("RequestAddress timed out.")
+	}
+}
+
+// RequestAddress requests an address
+func (d *Driver) requestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAddressResponse, error) {
 	//todo add a timeout
 	log.Debugf("RequestAddress: %v", r)
 
@@ -145,7 +166,7 @@ func (d *Driver) RequestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return res, nil
 		}
 
-		err = d.requestAddress(addr)
+		err = d.tryAddress(addr)
 		if err != nil {
 			log.WithError(err).Error("Error getting specific address")
 			return nil, err

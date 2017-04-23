@@ -13,7 +13,7 @@ import (
 
 const neighChanLen = 256
 
-func (d *Driver) requestAddress(addr *net.IPNet) error {
+func (d *Driver) tryAddress(addr *net.IPNet) error {
 	r, err := d.ns.probeAndWait(addr)
 	if err != nil {
 		log.WithError(err).Fatal("Error determining if addr is reachable")

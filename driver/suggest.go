@@ -56,24 +56,33 @@ func (cl *candidateList) fill(n *net.IPNet, ns *neighSubscription) {
 	uch := make(chan *netlink.Neigh)
 	defer close(uch)
 
+	for _, s := range cl.candidates {
+		if s == nil {
+			go sendRandomUnusedAddress(n, ns, cl.addCh)
+		}
+	}
+
 mainLoop:
 	for {
 		select {
 		case pc := <-cl.popCh: // pop a suggested address
 			for i, s := range cl.candidates {
-				if s != nil {
-					log.WithField("ip", s.ip).Debug("Popping address from suggestions")
-					cl.candidates[i] = nil
-					pc <- s.ip
-					s.delSub()
-					continue mainLoop
+				if s == nil {
+					go sendRandomUnusedAddress(n, ns, cl.addCh)
+					continue
 				}
+				log.WithField("ip", s.ip).Debug("Popping address from suggestions")
+				cl.candidates[i] = nil
+				pc <- s.ip
+				s.delSub()
+				go sendRandomUnusedAddress(n, ns, cl.addCh)
+				continue mainLoop
 			}
 			go sendRandomUnusedAddress(n, ns, pc)
 			continue mainLoop
 		case ip := <-cl.addCh:
-			for i, p := range cl.candidates {
-				if p == nil {
+			for i, s := range cl.candidates {
+				if s == nil {
 					s := ns.addSub(ip)
 					cl.candidates[i] = s
 					go func() {
@@ -87,6 +96,10 @@ mainLoop:
 			continue mainLoop
 		case ip := <-cl.delCh:
 			for i, s := range cl.candidates {
+				if s == nil {
+					go sendRandomUnusedAddress(n, ns, cl.addCh)
+					continue
+				}
 				if s.ip.IP.Equal(ip.IP) {
 					cl.candidates[i] = nil
 					s.delSub()
@@ -101,22 +114,23 @@ mainLoop:
 		case <-t.C: // need to refresh because the timer ticked
 		}
 
-		for _, p := range cl.candidates {
-			if p == nil {
+		for _, s := range cl.candidates {
+			if s == nil {
 				go sendRandomUnusedAddress(n, ns, cl.addCh)
+				continue
 			}
-			go func(p *subscription) {
-				r, err := ns.probeAndWait(p.ip)
+			go func(s *subscription) {
+				r, err := ns.probeAndWait(s.ip)
 				if err != nil {
-					log.WithError(err).WithField("ip", p).Error("Error probing candidate IP")
-					cl.delCh <- p.ip
+					log.WithError(err).WithField("ip", s).Error("Error probing candidate IP")
+					cl.delCh <- s.ip
 					return
 				}
 				if r {
-					log.WithField("ip", p).Debug("Candidate IP in use")
-					cl.delCh <- p.ip
+					log.WithField("ip", s).Debug("Candidate IP in use")
+					cl.delCh <- s.ip
 				}
-			}(p)
+			}(s)
 		}
 	}
 }

@@ -45,9 +45,10 @@ type neighSubscription struct {
 }
 
 type subscription struct {
-	ip    *net.IPNet
-	sub   chan *netlink.Neigh
-	close chan struct{}
+	ip      *net.IPNet
+	created time.Time
+	sub     chan *netlink.Neigh
+	close   chan struct{}
 }
 
 func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
@@ -86,9 +87,10 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 
 func (ns *neighSubscription) addSub(ip *net.IPNet) *subscription {
 	sub := &subscription{
-		ip:    ip,
-		sub:   make(chan *netlink.Neigh, neighChanLen),
-		close: make(chan struct{}),
+		ip:      ip,
+		created: time.Now(),
+		sub:     make(chan *netlink.Neigh, neighChanLen),
+		close:   make(chan struct{}),
 	}
 	go func() { ns.addSubCh <- sub }()
 	return sub
@@ -163,17 +165,16 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 	tick := time.NewTicker(3 * time.Second)
 	go func() {
 		for {
-			// Always add subs before listening for updates
 			select {
 			case sub := <-ns.addSubCh:
 				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
-				continue
-			default:
-			}
-
-			select {
-			case sub := <-ns.addSubCh:
-				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
+				n := neighs[sub.ip.String()]
+				// Get the current entry, if it's newer than the sub, return it
+				if n != nil && sub.created.Before(n.time) {
+					go func(sub *subscription, n *netlink.Neigh) {
+						sub.sub <- n
+					}(sub, n.neigh)
+				}
 				continue
 			case <-tick.C:
 				neighList, err := netlink.NeighList(0, netlink.FAMILY_V4)
@@ -239,9 +240,9 @@ func (neighs neighbors) update(n *netlink.Neigh, subs []*subscription) {
 			close(sub.sub)
 		// Send the update
 		default:
-			go func(sub *subscription) {
+			go func(sub *subscription, n *netlink.Neigh) {
 				sub.sub <- n
-			}(sub)
+			}(sub, n)
 		}
 	}
 }

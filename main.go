@@ -36,6 +36,16 @@ func main() {
 			Value: ":8080",
 			Usage: "TCP Address to bind the plugin on.",
 		},
+		cli.IntFlag{
+			Name:  "exclude-first, xf",
+			Value: 0,
+			Usage: "Exclude the first n addresses from each pool from being provided as random addresses",
+		},
+		cli.IntFlag{
+			Name:  "exclude-last, xl",
+			Value: 0,
+			Usage: "Exclude the last n addresses from each pool from being provided as random addresses",
+		},
 	}
 	app.Action = Run
 	err := app.Run(os.Args)
@@ -56,6 +66,8 @@ func Run(ctx *cli.Context) error {
 		FullTimestamp:    true,
 	})
 	log.WithField("Version", version).Info("Starting")
+	xf := ctx.Int("xf")
+	xl := ctx.Int("xl")
 
 	quit := make(chan struct{}) // tells other goroutines to quit
 	var wg sync.WaitGroup       // waits for goroutines to quit
@@ -85,7 +97,7 @@ func Run(ctx *cli.Context) error {
 		close(done)
 	}()
 
-	d, err := driver.NewDriver(quit)
+	d, err := driver.NewDriver(quit, xf, xl)
 	if err != nil {
 		log.Error("Error initializing driver")
 		ech <- err

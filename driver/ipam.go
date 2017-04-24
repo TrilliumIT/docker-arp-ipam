@@ -17,11 +17,13 @@ type Driver struct {
 	ipam.Ipam
 	ns         *neighSubscription
 	candidates *candidateNets
+	xf         int
+	xl         int
 	quit       <-chan struct{}
 }
 
 // NewDriver returns a driver object
-func NewDriver(quit <-chan struct{}) (*Driver, error) {
+func NewDriver(quit <-chan struct{}, xf, xl int) (*Driver, error) {
 	log.Debugf("NewDriver")
 	ns, err := newNeighSubscription(quit)
 	if err != nil {
@@ -31,6 +33,8 @@ func NewDriver(quit <-chan struct{}) (*Driver, error) {
 	d := &Driver{
 		ns:   ns,
 		quit: quit,
+		xf:   xf,
+		xl:   xl,
 		candidates: &candidateNets{
 			nets: make(map[string]*candidateList),
 			quit: quit,

@@ -129,6 +129,12 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 		for {
 			for {
 				msgs, err := s.Receive()
+				select {
+				case <-quit:
+					return
+				default:
+				}
+
 				if err != nil {
 					log.WithError(err).Error("Error recieving neighbor update")
 				}

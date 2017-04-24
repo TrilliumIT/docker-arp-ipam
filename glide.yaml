@@ -7,3 +7,6 @@ import:
   - ipam
 - package: github.com/vishvananda/netlink
 - package: github.com/TrilliumIT/iputil
+- package: github.com/docker/go-connections
+  subpackages:
+  - sockets

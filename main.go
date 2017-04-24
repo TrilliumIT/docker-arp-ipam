@@ -4,11 +4,11 @@ import (
 	"os"
 	"os/signal"
 	"runtime/pprof"
-	"sync"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/TrilliumIT/docker-arp-ipam/driver"
+	"github.com/docker/go-connections/sockets"
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/urfave/cli"
 )
@@ -70,44 +70,44 @@ func Run(ctx *cli.Context) error {
 	xl := ctx.Int("xl")
 
 	quit := make(chan struct{}) // tells other goroutines to quit
-	var wg sync.WaitGroup       // waits for goroutines to quit
-	done := make(chan struct{}) // tells main that we're done
 	ech := make(chan error)     // catches an error from serveTCP
 	var err error               // holds the final return value
+
+	d, err := driver.NewDriver(quit, xf, xl)
+	if err != nil {
+		log.WithError(err).Error("Error initializing driver")
+		return err
+	}
+
+	h := ipam.NewHandler(d)
+	l, err := sockets.NewTCPSocket(ctx.String("address"), nil)
+	if err != nil {
+		log.WithError(err).Error("Error creating tcp socket")
+		return err
+	}
+
+	go func() {
+		ech <- h.Serve(l)
+	}()
 
 	c := make(chan os.Signal)
 	defer close(c)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-c:
-			log.Debugf("Sigterm caught. Closing")
-			if log.GetLevel() == log.DebugLevel {
-				log.Debug("Dumping stack traces for all goroutines")
-				if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
-					log.WithError(err).Error("Error getting stack trace")
-				}
+
+	select {
+	case <-c:
+		log.Debugf("Sigterm caught. Closing")
+		if log.GetLevel() == log.DebugLevel {
+			log.Debug("Dumping stack traces for all goroutines")
+			if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+				log.WithError(err).Error("Error getting stack trace")
 			}
-		case err = <-ech:
-			log.Error(err)
 		}
-		close(quit)
-		wg.Wait()
-		close(done)
-	}()
-
-	d, err := driver.NewDriver(quit, xf, xl)
-	if err != nil {
-		log.Error("Error initializing driver")
-		ech <- err
+	case err = <-ech:
+		log.Error(err)
 	}
+	close(quit)
 
-	h := ipam.NewHandler(d)
-	go func() {
-		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
-	}()
-
-	<-done
 	return nil
 }

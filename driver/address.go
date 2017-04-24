@@ -9,6 +9,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
+	"sync"
 )
 
 const neighChanLen = 256
@@ -40,6 +41,7 @@ func parseAddrStatus(n *netlink.Neigh) (known, reachable bool) {
 }
 
 type neighSubscription struct {
+	quit     chan struct{}
 	addSubCh chan *subscription
 	checkCh  chan *neighCheckReq
 }
@@ -67,6 +69,8 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 	probe(addr.IP)
 	for {
 		select {
+		case <-ns.quit:
+			return
 		case n := <-sub.sub:
 			known, reachable = parseAddrStatus(n)
 			if known {
@@ -110,24 +114,37 @@ type neighUpdate struct {
 	neigh *netlink.Neigh
 }
 
-func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
+func newNeighSubscription(quit <-chan struct{}) *neighSubscription {
 	ns := &neighSubscription{
+		quit:     quit,
 		addSubCh: make(chan *subscription),
 		checkCh:  make(chan *neighCheckReq),
 	}
+	return ns
+}
+
+func (ns *neighSubscription) start() error {
+	quit := ns.quit
+	defer close(ns.addSubCh)
+	defer close(ns.checkCh)
+	wg := sync.WaitGroup{}
 
 	s, err := nl.Subscribe(syscall.NETLINK_ROUTE, syscall.RTNLGRP_NEIGH)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-quit
 		s.Close()
 	}()
 
 	neighSubCh := make(chan []*neighUpdate, neighChanLen)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			for {
 				msgs, err := s.Receive()
@@ -163,9 +180,13 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 	neighs := make(neighbors)
 	subs := make(map[string][]*subscription)
 	tick := time.NewTicker(3 * time.Second)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
+			case <-quit:
+				return
 			case sub := <-ns.addSubCh:
 				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
 				n := neighs[sub.ip.String()]
@@ -214,7 +235,8 @@ func newNeighSubscription(quit <-chan struct{}) (*neighSubscription, error) {
 		}
 	}()
 
-	return ns, nil
+	wg.Wait()
+	return nil
 }
 
 func (ns *neighSubscription) check(ip net.IP) *netlink.Neigh {

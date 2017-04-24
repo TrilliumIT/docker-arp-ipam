@@ -43,6 +43,11 @@ func NewDriver(quit <-chan struct{}, xf, xl int) (*Driver, error) {
 	return d, nil
 }
 
+func (d *Driver) Start() error {
+	log.Debugf("Starting driver")
+	return d.ns.start()
+}
+
 // GetCapabilities is what docker calls when initially connecting
 func (d *Driver) GetCapabilities() (*ipam.CapabilitiesResponse, error) {
 	log.Debugf("GetCapabilities")

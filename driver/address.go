@@ -41,7 +41,7 @@ func parseAddrStatus(n *netlink.Neigh) (known, reachable bool) {
 }
 
 type neighSubscription struct {
-	quit     chan struct{}
+	quit     <-chan struct{}
 	addSubCh chan *subscription
 	checkCh  chan *neighCheckReq
 }

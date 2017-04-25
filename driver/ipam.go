@@ -23,13 +23,9 @@ type Driver struct {
 }
 
 // NewDriver returns a driver object
-func NewDriver(quit <-chan struct{}, xf, xl int) (*Driver, error) {
+func NewDriver(quit <-chan struct{}, xf, xl int) *Driver {
 	log.Debugf("NewDriver")
-	ns, err := newNeighSubscription(quit)
-	if err != nil {
-		log.WithError(err).Error("Error setting up neighbor subscription")
-		return nil, err
-	}
+	ns := newNeighSubscription(quit)
 	d := &Driver{
 		ns:   ns,
 		quit: quit,
@@ -40,7 +36,7 @@ func NewDriver(quit <-chan struct{}, xf, xl int) (*Driver, error) {
 			quit: quit,
 		},
 	}
-	return d, nil
+	return d
 }
 
 func (d *Driver) Start() error {

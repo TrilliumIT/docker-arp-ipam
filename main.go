@@ -3,12 +3,12 @@ package main
 import (
 	"os"
 	"os/signal"
-	"runtime/pprof"
+	//"runtime/pprof"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/TrilliumIT/docker-arp-ipam/driver"
-	"github.com/docker/go-connections/sockets"
+	//"github.com/docker/go-connections/sockets"
 	"github.com/docker/go-plugins-helpers/ipam"
 	"github.com/urfave/cli"
 )
@@ -70,24 +70,18 @@ func Run(ctx *cli.Context) error {
 	xl := ctx.Int("xl")
 
 	quit := make(chan struct{}) // tells other goroutines to quit
-	ech := make(chan error)     // catches an error from serveTCP
-	var err error               // holds the final return value
 
-	d, err := driver.NewDriver(quit, xf, xl)
-	if err != nil {
-		log.WithError(err).Error("Error initializing driver")
-		return err
-	}
+	d := driver.NewDriver(quit, xf, xl)
+
+	dErrCh := make(chan error) // catches an error from driver
+	go func() {
+		dErrCh <- d.Start()
+	}()
 
 	h := ipam.NewHandler(d)
-	l, err := sockets.NewTCPSocket(ctx.String("address"), nil)
-	if err != nil {
-		log.WithError(err).Error("Error creating tcp socket")
-		return err
-	}
-
+	lErrCh := make(chan error) // catches an error from serveTCP
 	go func() {
-		ech <- h.Serve(l)
+		lErrCh <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
 	}()
 
 	c := make(chan os.Signal)
@@ -95,19 +89,47 @@ func Run(ctx *cli.Context) error {
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
 
+	var retErr error // holds the final return value
 	select {
 	case <-c:
 		log.Debugf("Sigterm caught. Closing")
 		if log.GetLevel() == log.DebugLevel {
-			log.Debug("Dumping stack traces for all goroutines")
-			if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
-				log.WithError(err).Error("Error getting stack trace")
-			}
+			/*
+				log.Debug("Dumping stack traces for all goroutines")
+				if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+					log.WithError(err).Error("Error getting stack trace")
+				}
+			*/
 		}
-	case err = <-ech:
-		log.Error(err)
+	case err := <-lErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from listener")
+			retErr = err
+		}
+	case err := <-dErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from driver")
+			retErr = err
+		}
 	}
-	close(quit)
 
-	return nil
+	select {
+	case err := <-lErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from listener")
+			retErr = err
+		}
+	default:
+	}
+	close(lErrCh)
+
+	close(quit)
+	err := <-dErrCh
+	if err != nil {
+		log.WithError(err).Error("Error from driver")
+		retErr = err
+	}
+	close(dErrCh)
+
+	return retErr
 }

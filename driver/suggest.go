@@ -2,12 +2,13 @@ package driver
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/TrilliumIT/iputil"
-	"github.com/vishvananda/netlink"
 	"net"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/iputil"
+	"github.com/vishvananda/netlink"
 )
 
 type candidateNets struct {
@@ -25,7 +26,7 @@ type candidateList struct {
 }
 
 // Does nothing if net already exists
-func (cn *candidateNets) addNet(n *net.IPNet, ns *neighSubscription) *candidateList {
+func (cn *candidateNets) addNet(n *net.IPNet, ns *neighSubscription, xf, xl int) *candidateList {
 	cn.lock.Lock()
 	defer cn.lock.Unlock()
 	if cl, ok := cn.nets[n.String()]; ok {
@@ -37,7 +38,7 @@ func (cn *candidateNets) addNet(n *net.IPNet, ns *neighSubscription) *candidateL
 		addCh: make(chan *net.IPNet),
 		delCh: make(chan *net.IPNet),
 	}
-	go cl.fill(n, ns)
+	go cl.fill(n, ns, xf, xl)
 	cn.nets[n.String()] = cl
 	return cl
 }
@@ -49,30 +50,39 @@ func (cl *candidateList) pop(ns *neighSubscription) *net.IPNet {
 	return <-pc
 }
 
-func (cl *candidateList) fill(n *net.IPNet, ns *neighSubscription) {
+func (cl *candidateList) fill(n *net.IPNet, ns *neighSubscription, xf, xl int) {
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	uch := make(chan *netlink.Neigh)
 	defer close(uch)
+
+	for _, s := range cl.candidates {
+		if s == nil {
+			go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
+		}
+	}
 
 mainLoop:
 	for {
 		select {
 		case pc := <-cl.popCh: // pop a suggested address
 			for i, s := range cl.candidates {
-				if s != nil {
-					log.WithField("ip", s.ip).Debug("Popping address from suggestions")
-					cl.candidates[i] = nil
-					pc <- s.ip
-					s.delSub()
-					continue mainLoop
+				if s == nil {
+					go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
+					continue
 				}
+				log.WithField("ip", s.ip).Debug("Popping address from suggestions")
+				cl.candidates[i] = nil
+				pc <- s.ip
+				s.delSub()
+				go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
+				continue mainLoop
 			}
-			go sendRandomUnusedAddress(n, ns, pc)
+			go sendRandomUnusedAddress(n, ns, xf, xl, pc)
 			continue mainLoop
 		case ip := <-cl.addCh:
-			for i, p := range cl.candidates {
-				if p == nil {
+			for i, s := range cl.candidates {
+				if s == nil {
 					s := ns.addSub(ip)
 					cl.candidates[i] = s
 					go func() {
@@ -86,10 +96,14 @@ mainLoop:
 			continue mainLoop
 		case ip := <-cl.delCh:
 			for i, s := range cl.candidates {
+				if s == nil {
+					go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
+					continue
+				}
 				if s.ip.IP.Equal(ip.IP) {
 					cl.candidates[i] = nil
 					s.delSub()
-					go sendRandomUnusedAddress(n, ns, cl.addCh)
+					go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
 					continue mainLoop
 				}
 			}
@@ -97,33 +111,32 @@ mainLoop:
 		case <-cl.quit:
 			return
 		case <-uch: // We got an update from the arp table
-			break
 		case <-t.C: // need to refresh because the timer ticked
-			break
 		}
 
-		for _, p := range cl.candidates {
-			if p == nil {
-				go sendRandomUnusedAddress(n, ns, cl.addCh)
+		for _, s := range cl.candidates {
+			if s == nil {
+				go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
+				continue
 			}
-			go func() {
-				r, err := ns.probeAndWait(p.ip)
+			go func(s *subscription) {
+				r, err := ns.probeAndWait(s.ip)
 				if err != nil {
-					log.WithError(err).WithField("ip", p).Error("Error probing candidate IP")
-					cl.delCh <- p.ip
+					log.WithError(err).WithField("ip", s).Error("Error probing candidate IP")
+					cl.delCh <- s.ip
 					return
 				}
 				if r {
-					log.WithField("ip", p).Debug("Candidate IP in use")
-					cl.delCh <- p.ip
+					log.WithField("ip", s).Debug("Candidate IP in use")
+					cl.delCh <- s.ip
 				}
-			}()
+			}(s)
 		}
 	}
 }
 
-func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, c chan<- *net.IPNet) {
-	addr, err := getNewRandomUnusedAddr(n, ns)
+func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, xf, xl int, c chan<- *net.IPNet) {
+	addr, err := getNewRandomUnusedAddr(n, ns, xf, xl)
 	if err != nil {
 		log.WithError(err).Error("Error getting new random address.")
 		return
@@ -132,12 +145,12 @@ func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, c chan<- *net.
 }
 
 func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
-	cl := d.candidates.addNet(n, d.ns)
+	cl := d.candidates.addNet(n, d.ns, d.xf, d.xl)
 	r := cl.pop(d.ns)
 	if r != nil {
 		return r, nil
 	}
-	r, err := getNewRandomUnusedAddr(n, d.ns)
+	r, err := getNewRandomUnusedAddr(n, d.ns, d.xf, d.xl)
 	if err != nil {
 		log.WithError(err).Error("Error getting new random address")
 		return nil, err
@@ -145,7 +158,7 @@ func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
 	return r, nil
 }
 
-func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription) (*net.IPNet, error) {
+func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*net.IPNet, error) {
 	log.Debugf("Generating Random Address in network %v", n)
 	tried := make(map[string]struct{})
 	var e struct{}
@@ -154,6 +167,13 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription) (*net.IPNet, er
 	if totalAddresses > 2 { // This network is not a /30 exclude first and last
 		tried[string(iputil.FirstAddr(n))] = e
 		tried[string(iputil.LastAddr(n))] = e
+	}
+	// Add excluded addresses to tried array
+	for i := 1; i <= xf; i++ {
+		tried[string(iputil.IPAdd(iputil.FirstAddr(n), i))] = e
+	}
+	for i := 1; i <= xl; i++ {
+		tried[string(iputil.IPAdd(iputil.LastAddr(n), i*-1))] = e
 	}
 	for len(tried) < totalAddresses {
 		ip, err := iputil.RandAddr(n)

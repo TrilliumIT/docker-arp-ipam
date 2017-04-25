@@ -1,15 +1,16 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/TrilliumIT/docker-arp-ipam/driver"
-	"github.com/docker/go-plugins-helpers/ipam"
-	"github.com/urfave/cli"
 	"os"
 	"os/signal"
-	"runtime/pprof"
-	"sync"
+	//"runtime/pprof"
 	"syscall"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/TrilliumIT/docker-arp-ipam/driver"
+	//"github.com/docker/go-connections/sockets"
+	"github.com/docker/go-plugins-helpers/ipam"
+	"github.com/urfave/cli"
 )
 
 const version = "0.20"
@@ -35,9 +36,22 @@ func main() {
 			Value: ":8080",
 			Usage: "TCP Address to bind the plugin on.",
 		},
+		cli.IntFlag{
+			Name:  "exclude-first, xf",
+			Value: 0,
+			Usage: "Exclude the first n addresses from each pool from being provided as random addresses",
+		},
+		cli.IntFlag{
+			Name:  "exclude-last, xl",
+			Value: 0,
+			Usage: "Exclude the last n addresses from each pool from being provided as random addresses",
+		},
 	}
 	app.Action = Run
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.WithError(err).Fatal("Error from app")
+	}
 }
 
 // Run initializes the driver
@@ -52,44 +66,70 @@ func Run(ctx *cli.Context) error {
 		FullTimestamp:    true,
 	})
 	log.WithField("Version", version).Info("Starting")
+	xf := ctx.Int("xf")
+	xl := ctx.Int("xl")
 
 	quit := make(chan struct{}) // tells other goroutines to quit
-	var wg sync.WaitGroup       // waits for goroutines to quit
-	done := make(chan struct{}) // tells main that we're done
-	ech := make(chan error)     // catches an error from serveTCP
-	var err error               // holds the final return value
+
+	d := driver.NewDriver(quit, xf, xl)
+
+	dErrCh := make(chan error) // catches an error from driver
+	go func() {
+		dErrCh <- d.Start()
+	}()
+
+	h := ipam.NewHandler(d)
+	lErrCh := make(chan error) // catches an error from serveTCP
+	go func() {
+		lErrCh <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
+	}()
 
 	c := make(chan os.Signal)
 	defer close(c)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		select {
-		case _ = <-c:
-			log.Debugf("Sigterm caught. Closing")
-			if log.GetLevel() == log.DebugLevel {
-				log.Debug("Dumping stack traces for all goroutines")
-				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-			}
-		case err = <-ech:
-			log.Error(err)
-		}
-		close(quit)
-		wg.Wait()
-		close(done)
-	}()
 
-	d, err := driver.NewDriver(quit, wg)
-	if err != nil {
-		log.Error("Error initializing driver")
-		ech <- err
+	var retErr error // holds the final return value
+	select {
+	case <-c:
+		log.Debugf("Sigterm caught. Closing")
+		if log.GetLevel() == log.DebugLevel {
+			/*
+				log.Debug("Dumping stack traces for all goroutines")
+				if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+					log.WithError(err).Error("Error getting stack trace")
+				}
+			*/
+		}
+	case err := <-lErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from listener")
+			retErr = err
+		}
+	case err := <-dErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from driver")
+			retErr = err
+		}
 	}
 
-	h := ipam.NewHandler(d)
-	go func() {
-		ech <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
-	}()
+	select {
+	case err := <-lErrCh:
+		if err != nil {
+			log.WithError(err).Error("Error from listener")
+			retErr = err
+		}
+	default:
+	}
+	close(lErrCh)
 
-	<-done
-	return nil
+	close(quit)
+	err := <-dErrCh
+	if err != nil {
+		log.WithError(err).Error("Error from driver")
+		retErr = err
+	}
+	close(dErrCh)
+
+	return retErr
 }

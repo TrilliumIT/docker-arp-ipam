@@ -69,7 +69,7 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 	}
 
 	t := time.NewTicker(1 * time.Second)
-	to := time.Now().Add(5 * time.Second)
+	to := time.Now().Add(8 * time.Second)
 	defer t.Stop()
 	sub := ns.addSub(addr)
 	defer sub.delSub()

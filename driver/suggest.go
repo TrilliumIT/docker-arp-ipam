@@ -165,15 +165,15 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*n
 	ones, maskSize := n.Mask.Size()
 	totalAddresses := 1 << uint8(maskSize-ones)
 	if totalAddresses > 2 { // This network is not a /30 exclude first and last
-		tried[string(iputil.FirstAddr(n))] = e
-		tried[string(iputil.LastAddr(n))] = e
+		tried[iputil.FirstAddr(n).String()] = e
+		tried[iputil.LastAddr(n).String()] = e
 	}
 	// Add excluded addresses to tried array
 	for i := 1; i <= xf; i++ {
-		tried[string(iputil.IPAdd(iputil.FirstAddr(n), i))] = e
+		tried[iputil.IPAdd(iputil.FirstAddr(n), i).String()] = e
 	}
 	for i := 1; i <= xl; i++ {
-		tried[string(iputil.IPAdd(iputil.LastAddr(n), i*-1))] = e
+		tried[iputil.IPAdd(iputil.LastAddr(n), i*-1).String()] = e
 	}
 	for len(tried) < totalAddresses {
 		ip, err := iputil.RandAddr(n)
@@ -181,7 +181,7 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*n
 			log.WithError(err).Error("Error generating random address")
 			return nil, err
 		}
-		if _, ok := tried[string(ip)]; ok { // this address was already tried
+		if _, ok := tried[ip.String()]; ok { // this address was already tried
 			continue
 		}
 		addr := &net.IPNet{
@@ -198,6 +198,7 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*n
 			return &net.IPNet{IP: ip, Mask: n.Mask}, nil
 		}
 		log.WithField("ip", ip).Debug("Random address reachable, retrying")
+		tried[ip.String()] = e
 	}
 	return nil, fmt.Errorf("All avaliable addresses are in use")
 }

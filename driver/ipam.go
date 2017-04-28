@@ -178,7 +178,7 @@ func (d *Driver) requestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 			return res, nil
 		}
 
-		err = d.tryAddress(addr)
+		err = d.tryAddress(addr, 8*time.Second)
 		if err != nil {
 			log.WithError(err).Error("Error getting specific address")
 			return nil, err
@@ -189,7 +189,7 @@ func (d *Driver) requestAddress(r *ipam.RequestAddressRequest) (*ipam.RequestAdd
 	}
 
 	log.Debugf("Random Address Requested in network %v", n)
-	retAddr, err := d.getRandomUnusedAddr(n)
+	retAddr, err := d.getRandomUnusedAddr(n, 8*time.Second)
 	if err != nil {
 		log.WithError(err).Error("Error getting random address")
 		return nil, err

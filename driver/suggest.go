@@ -120,9 +120,13 @@ mainLoop:
 				continue
 			}
 			go func(s *subscription) {
-				r, err := ns.probeAndWait(s.ip)
+				r, err := ns.probeAndWait(s.ip, 15*time.Second)
 				if err != nil {
-					log.WithError(err).WithField("ip", s).Error("Error probing candidate IP")
+					if _, ok := err.(*probeTimeoutError); ok {
+						log.WithError(err).Debug("Timed out probing candidate ip. Trying another")
+					} else {
+						log.WithError(err).WithField("ip", s.ip.String()).Error("Error probing candidate IP")
+					}
 					cl.delCh <- s.ip
 					return
 				}
@@ -136,7 +140,7 @@ mainLoop:
 }
 
 func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, xf, xl int, c chan<- *net.IPNet) {
-	addr, err := getNewRandomUnusedAddr(n, ns, xf, xl)
+	addr, err := getNewRandomUnusedAddr(n, 15*time.Second, ns, xf, xl)
 	if err != nil {
 		log.WithError(err).Error("Error getting new random address.")
 		return
@@ -144,13 +148,13 @@ func sendRandomUnusedAddress(n *net.IPNet, ns *neighSubscription, xf, xl int, c 
 	c <- addr
 }
 
-func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
+func (d *Driver) getRandomUnusedAddr(n *net.IPNet, to time.Duration) (*net.IPNet, error) {
 	cl := d.candidates.addNet(n, d.ns, d.xf, d.xl)
 	r := cl.pop(d.ns)
 	if r != nil {
 		return r, nil
 	}
-	r, err := getNewRandomUnusedAddr(n, d.ns, d.xf, d.xl)
+	r, err := getNewRandomUnusedAddr(n, to, d.ns, d.xf, d.xl)
 	if err != nil {
 		log.WithError(err).Error("Error getting new random address")
 		return nil, err
@@ -158,7 +162,7 @@ func (d *Driver) getRandomUnusedAddr(n *net.IPNet) (*net.IPNet, error) {
 	return r, nil
 }
 
-func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*net.IPNet, error) {
+func getNewRandomUnusedAddr(n *net.IPNet, to time.Duration, ns *neighSubscription, xf, xl int) (*net.IPNet, error) {
 	log.Debugf("Generating Random Address in network %v", n)
 	tried := make(map[string]struct{})
 	var e struct{}
@@ -188,7 +192,7 @@ func getNewRandomUnusedAddr(n *net.IPNet, ns *neighSubscription, xf, xl int) (*n
 			IP:   ip,
 			Mask: n.Mask,
 		}
-		r, err := ns.probeAndWait(addr)
+		r, err := ns.probeAndWait(addr, to)
 		if err != nil {
 			log.WithError(err).Error("Error probing random address")
 			continue

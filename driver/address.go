@@ -14,8 +14,8 @@ import (
 
 const neighChanLen = 256
 
-func (d *Driver) tryAddress(addr *net.IPNet) error {
-	r, err := d.ns.probeAndWait(addr)
+func (d *Driver) tryAddress(addr *net.IPNet, to time.Duration) error {
+	r, err := d.ns.probeAndWait(addr, to)
 	if err != nil {
 		log.WithError(err).Fatal("Error determining if addr is reachable")
 		return err
@@ -61,7 +61,15 @@ type subscription struct {
 	close   chan struct{}
 }
 
-func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err error) {
+type probeTimeoutError struct {
+	err string
+}
+
+func (e *probeTimeoutError) Error() string {
+	return e.err
+}
+
+func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (reachable bool, err error) {
 	var known bool
 	known, reachable = ns.addrStatus(addr.IP)
 	if known {
@@ -69,7 +77,7 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 	}
 
 	t := time.NewTicker(1 * time.Second)
-	to := time.Now().Add(8 * time.Second)
+	stopTime := time.Now().Add(to)
 	defer t.Stop()
 	sub := ns.addSub(addr)
 	defer sub.delSub()
@@ -90,8 +98,9 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet) (reachable bool, err 
 		if known {
 			return
 		}
-		if time.Now().After(to) {
-			return true, fmt.Errorf("Error determining reachability for %v", addr)
+		if time.Now().After(stopTime) {
+			return true, fmt.Errorf("Timed out determining reachability for %v", addr)
+			return true, &probeTimeoutError{err: fmt.Sprintf("Timed out determining reachability for %v", addr)}
 		}
 		probe(addr.IP)
 	}

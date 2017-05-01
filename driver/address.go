@@ -17,7 +17,7 @@ const neighChanLen = 256
 func (d *Driver) tryAddress(addr *net.IPNet, to time.Duration) error {
 	r, err := d.ns.probeAndWait(addr, to)
 	if err != nil {
-		log.WithError(err).Fatal("Error determining if addr is reachable")
+		log.WithError(err).Error("Error determining if addr is reachable")
 		return err
 	}
 	if r {

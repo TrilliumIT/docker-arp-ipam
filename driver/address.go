@@ -201,6 +201,9 @@ func (ns *neighSubscription) start() error {
 			case neighList := <-neighSubCh:
 				for _, n := range neighList {
 					sendNeighUpdates(n.neigh, subs[n.neigh.IP.String()])
+					if len(subs[n.neigh.IP.String()]) == 0 {
+						delete(subs, n.neigh.IP.String())
+					}
 				}
 				continue
 			}

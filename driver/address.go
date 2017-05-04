@@ -26,18 +26,26 @@ func (d *Driver) tryAddress(addr *net.IPNet, to time.Duration) error {
 	return nil
 }
 
-func (ns *neighSubscription) addrStatus(addr net.IP) (known, reachable bool) {
+func getNeigh(addr net.IP) (*netlink.Neigh, error) {
 	neighList, err := netlink.NeighList(0, netlink.FAMILY_V4)
 	if err != nil {
 		log.WithError(err).Error("Error refreshing neighbor table.")
-		return
+		return nil, err
 	}
 	for _, n := range neighList {
 		if n.IP.Equal(addr) {
-			return parseAddrStatus(&n)
+			return &n, nil
 		}
 	}
-	return
+	return nil, nil
+}
+
+func (ns *neighSubscription) addrStatus(addr net.IP) (known, reachable bool) {
+	n, err := getNeigh(addr)
+	if err != nil {
+		return
+	}
+	return parseAddrStatus(n)
 }
 
 func parseAddrStatus(n *netlink.Neigh) (known, reachable bool) {
@@ -77,7 +85,8 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (re
 	}
 
 	t := time.NewTicker(1 * time.Second)
-	stopTime := time.Now().Add(to)
+	startTime := time.Now()
+	stopTime := startTime.Add(to)
 	defer t.Stop()
 	sub := ns.addSub(addr)
 	defer sub.delSub()
@@ -99,7 +108,14 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (re
 			return
 		}
 		if time.Now().After(stopTime) {
-			return true, fmt.Errorf("Timed out determining reachability for %v", addr)
+			l := log.WithField("ip", addr).
+				WithField("waited", time.Now().Sub(startTime))
+			n, err := getNeigh(addr.IP)
+			if err != nil {
+				l = l.WithError(err)
+			}
+			l = l.WithField("neigh", n)
+			l.Debug("Timed out determining reachability")
 			return true, &probeTimeoutError{err: fmt.Sprintf("Timed out determining reachability for %v", addr)}
 		}
 		probe(addr.IP)

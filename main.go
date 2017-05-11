@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 	"os/signal"
-	//"runtime/pprof"
+	"runtime/pprof"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
@@ -94,12 +94,12 @@ func Run(ctx *cli.Context) error {
 	case <-c:
 		log.Debugf("Sigterm caught. Closing")
 		if log.GetLevel() == log.DebugLevel {
-			/*
-				log.Debug("Dumping stack traces for all goroutines")
-				if err = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
-					log.WithError(err).Error("Error getting stack trace")
-				}
-			*/
+			///*
+			log.Debug("Dumping stack traces for all goroutines")
+			if err := pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+				log.WithError(err).Error("Error getting stack trace")
+			}
+			//*/
 		}
 	case err := <-lErrCh:
 		if err != nil {

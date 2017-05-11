@@ -85,11 +85,11 @@ mainLoop:
 				if s == nil {
 					s := ns.addSub(ip)
 					cl.candidates[i] = s
-					go func() {
+					go func(s *subscription) {
 						for u := range s.sub {
 							uch <- u
 						}
-					}()
+					}(s)
 					continue mainLoop
 				}
 			}

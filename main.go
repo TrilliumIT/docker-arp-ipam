@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 	"os/signal"
-	"runtime/pprof"
+	//"runtime/pprof"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
@@ -84,7 +84,7 @@ func Run(ctx *cli.Context) error {
 		lErrCh <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
 	}()
 
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 32)
 	defer close(c)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
@@ -93,14 +93,14 @@ func Run(ctx *cli.Context) error {
 	select {
 	case <-c:
 		log.Debugf("Sigterm caught. Closing")
-		if log.GetLevel() == log.DebugLevel {
-			///*
-			log.Debug("Dumping stack traces for all goroutines")
-			if err := pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
-				log.WithError(err).Error("Error getting stack trace")
+		/*
+			if log.GetLevel() == log.DebugLevel {
+					log.Debug("Dumping stack traces for all goroutines")
+					if err := pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
+						log.WithError(err).Error("Error getting stack trace")
+					}
 			}
-			//*/
-		}
+		*/
 	case err := <-lErrCh:
 		if err != nil {
 			log.WithError(err).Error("Error from listener")

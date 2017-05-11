@@ -72,13 +72,13 @@ mainLoop:
 					continue
 				}
 				log.WithField("ip", s.ip).Debug("Popping address from suggestions")
-				cl.candidates[i] = nil
 				pc <- s.ip
 				s.delSub()
+				cl.candidates[i] = nil
 				go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
 				continue mainLoop
 			}
-			go sendRandomUnusedAddress(n, ns, xf, xl, pc)
+			pc <- nil
 			continue mainLoop
 		case ip := <-cl.addCh:
 			for i, s := range cl.candidates {
@@ -101,10 +101,9 @@ mainLoop:
 					continue
 				}
 				if s.ip.IP.Equal(ip.IP) {
-					cl.candidates[i] = nil
 					s.delSub()
+					cl.candidates[i] = nil
 					go sendRandomUnusedAddress(n, ns, xf, xl, cl.addCh)
-					continue mainLoop
 				}
 			}
 			continue mainLoop

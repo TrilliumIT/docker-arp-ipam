@@ -3,12 +3,12 @@ package driver
 import (
 	"fmt"
 	"net"
-	"runtime"
+	//"runtime"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/ipam"
-	"github.com/dustin/go-humanize"
+	//"github.com/dustin/go-humanize"
 	"github.com/vishvananda/netlink"
 )
 
@@ -43,31 +43,33 @@ func NewDriver(quit <-chan struct{}, xf, xl int) *Driver {
 
 func (d *Driver) Start() error {
 	log.Debugf("Starting driver")
-	go func() {
-		m := &runtime.MemStats{}
-		for {
-			runtime.ReadMemStats(m)
-			log.WithFields(log.Fields{
-				"GoRoutines": runtime.NumGoroutine(),
-				//"TotalAlloc": humanize.Bytes(m.TotalAlloc),
-				"Sys":     humanize.Bytes(m.Sys),
-				"Mallocs": humanize.Bytes(m.Mallocs),
-				"Frees":   humanize.Bytes(m.Frees),
-				"Live":    humanize.Bytes(m.Mallocs - m.Frees),
-				//"HeapAlloc": humanize.Bytes(m.HeapAlloc),
-				"HeapSys": humanize.Bytes(m.HeapSys),
-				//"HeapIdle": humanize.Bytes(m.HeapIdle),
-				//"HeapInUse": humanize.Bytes(m.HeapInuse),
-				//"HeapObjects": humanize.Bytes(m.HeapObjects),
-				"StackSys": humanize.Bytes(m.StackSys),
-				//"StackInUse": humanize.Bytes(m.StackInuse),
-				//"MspanInUse": humanize.Bytes(m.MSpanInuse),
-				"MCacheSys": humanize.Bytes(m.MCacheSys),
-				"OtherSys":  humanize.Bytes(m.OtherSys),
-			}).Debug("Go routines running")
-			time.Sleep(5 * time.Second)
-		}
-	}()
+	/*
+		go func() {
+			m := &runtime.MemStats{}
+			for {
+				runtime.ReadMemStats(m)
+				log.WithFields(log.Fields{
+					"GoRoutines": runtime.NumGoroutine(),
+					//"TotalAlloc": humanize.Bytes(m.TotalAlloc),
+					"Sys":     humanize.Bytes(m.Sys),
+					"Mallocs": humanize.Bytes(m.Mallocs),
+					"Frees":   humanize.Bytes(m.Frees),
+					"Live":    humanize.Bytes(m.Mallocs - m.Frees),
+					//"HeapAlloc": humanize.Bytes(m.HeapAlloc),
+					"HeapSys": humanize.Bytes(m.HeapSys),
+					//"HeapIdle": humanize.Bytes(m.HeapIdle),
+					//"HeapInUse": humanize.Bytes(m.HeapInuse),
+					//"HeapObjects": humanize.Bytes(m.HeapObjects),
+					"StackSys": humanize.Bytes(m.StackSys),
+					//"StackInUse": humanize.Bytes(m.StackInuse),
+					//"MspanInUse": humanize.Bytes(m.MSpanInuse),
+					"MCacheSys": humanize.Bytes(m.MCacheSys),
+					"OtherSys":  humanize.Bytes(m.OtherSys),
+				}).Debug("Go routines running")
+				time.Sleep(5 * time.Second)
+			}
+		}()
+	*/
 	return d.ns.start()
 }
 

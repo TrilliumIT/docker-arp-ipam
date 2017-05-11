@@ -213,15 +213,32 @@ func (ns *neighSubscription) start() error {
 				return
 			case sub := <-ns.addSubCh:
 				subs[sub.ip.String()] = append(subs[sub.ip.String()], sub)
-				continue
 			case neighList := <-neighSubCh:
 				for _, n := range neighList {
-					sendNeighUpdates(n.neigh, subs[n.neigh.IP.String()])
+					subs[n.neigh.IP.String()] = sendNeighUpdates(n.neigh, subs[n.neigh.IP.String()])
 					if len(subs[n.neigh.IP.String()]) == 0 {
 						delete(subs, n.neigh.IP.String())
 					}
 				}
-				continue
+			}
+			// cleanup
+			for ip, s := range subs {
+				l := len(s)
+				for i := range s {
+					j := l - i - 1 // loop in reverse order
+					sub := s[j]
+					select {
+					// Delete closed subs
+					case <-sub.close:
+						s = append(s[:j], s[j+1:]...)
+						close(sub.sub)
+					default:
+					}
+				}
+				subs[ip] = s
+				if len(s) == 0 {
+					delete(subs, ip)
+				}
 			}
 		}
 	}()
@@ -230,7 +247,7 @@ func (ns *neighSubscription) start() error {
 	return nil
 }
 
-func sendNeighUpdates(n *netlink.Neigh, subs []*subscription) {
+func sendNeighUpdates(n *netlink.Neigh, subs []*subscription) []*subscription {
 	l := len(subs)
 	for i := range subs {
 		j := l - i - 1 // loop in reverse order
@@ -247,6 +264,7 @@ func sendNeighUpdates(n *netlink.Neigh, subs []*subscription) {
 			}(sub, n)
 		}
 	}
+	return subs
 }
 
 func probe(ip net.IP) {

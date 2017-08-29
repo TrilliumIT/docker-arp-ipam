@@ -91,21 +91,21 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (re
 	sub := ns.addSub(addr)
 	defer sub.delSub()
 
-	probe(addr.IP)
 	for {
+		probe(addr.IP)
 		select {
 		case <-ns.quit:
 			return
 		case n := <-sub.sub:
 			known, reachable = parseAddrStatus(n)
 			if known {
-				return
+				return reachable, nil
 			}
 		case <-t.C:
 		}
 		known, reachable = ns.addrStatus(addr.IP)
 		if known {
-			return
+			return reachable, nil
 		}
 		if time.Now().After(stopTime) {
 			l := log.WithField("ip", addr).
@@ -113,12 +113,22 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (re
 			n, err := getNeigh(addr.IP)
 			if err != nil {
 				l = l.WithError(err)
+				l.Error("Error getting neighbor after timeout")
 			}
 			l = l.WithField("neigh", n)
-			l.Debug("Timed out determining reachability")
+			known, reachable = parseAddrStatus(n)
+			if known {
+				l.Debug("Reachability determined after timeout.")
+				return reachable, nil
+			}
+			// If we've waited 8 seconds, consider incomplete to be known
+			if n.State == netlink.NUD_INCOMPLETE {
+				l.Debug("Incomplete assumed non-reachable after timeout.")
+				return false, nil
+			}
+			l.Debug("Reachability indeterminable after timeout.")
 			return true, &probeTimeoutError{err: fmt.Sprintf("Timed out determining reachability for %v", addr)}
 		}
-		probe(addr.IP)
 	}
 }
 
@@ -129,7 +139,7 @@ func (ns *neighSubscription) addSub(ip *net.IPNet) *subscription {
 		sub:     make(chan *netlink.Neigh, neighChanLen),
 		close:   make(chan struct{}),
 	}
-	go func() { ns.addSubCh <- sub }()
+	ns.addSubCh <- sub
 	return sub
 }
 

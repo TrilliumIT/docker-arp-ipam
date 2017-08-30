@@ -1,39 +1,43 @@
 hash: 41327d2dd62189a67e17eae18c1553fb0d8d39a191e2a07d4895be29d44a2536
-updated: 2017-04-24T08:34:02.218311504-04:00
+updated: 2017-08-30T09:34:28.446859085-04:00
 imports:
 - name: github.com/coreos/go-systemd
-  version: 1f9909e51b2dab2487c26d64c8f2e7e580e4c9f5
+  version: d2196463941895ee908e13531a23a39feb9e1243
   subpackages:
   - activation
 - name: github.com/docker/go-connections
-  version: e15c02316c12de00874640cd76311849de2aeed5
+  version: 3ede32e2033de7505e6500d6c868c2b9ed9f169d
   subpackages:
   - sockets
 - name: github.com/docker/go-plugins-helpers
-  version: 8af45ff6ad5b7608853de51133c33e6638b02134
+  version: a9ef19c479cb60e751efa55f7f2b265776af1abf
   subpackages:
   - ipam
   - sdk
 - name: github.com/Microsoft/go-winio
-  version: fff283ad5116362ca252298cfc9b95828956d85d
+  version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/TrilliumIT/iputil
-  version: bd8d0991afc7eb3bc365a8799ba5e5573ecff2ec
+  version: 377eb56ebb29f092df8f5d1d49e39958e1bec0a5
 - name: github.com/urfave/cli
-  version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
+  version: f017f86fccc5a039a98f23311f34fdf78b014f78
 - name: github.com/vishvananda/netlink
-  version: b71e0bb214aebd980216cb2516e8bd7bca9e9672
+  version: f5a6f697a596c788d474984a38a0ac4ba0719e93
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
+- name: golang.org/x/crypto
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
-  version: 4876518f9e71663000c348837735820161a42df7
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - proxy
 - name: golang.org/x/sys
-  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
+  version: ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb
   subpackages:
   - unix
   - windows

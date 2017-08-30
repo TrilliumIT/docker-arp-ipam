@@ -81,7 +81,7 @@ func Run(ctx *cli.Context) error {
 	h := ipam.NewHandler(d)
 	lErrCh := make(chan error) // catches an error from serveTCP
 	go func() {
-		lErrCh <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), nil)
+		lErrCh <- h.ServeTCP(ctx.String("plugin-name"), ctx.String("address"), "/tmp", nil)
 	}()
 
 	c := make(chan os.Signal, 32)

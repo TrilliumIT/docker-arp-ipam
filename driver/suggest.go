@@ -179,11 +179,7 @@ func getNewRandomUnusedAddr(n *net.IPNet, to time.Duration, ns *neighSubscriptio
 		tried[iputil.IPAdd(iputil.LastAddr(n), i*-1).String()] = e
 	}
 	for len(tried) < totalAddresses {
-		ip, err := iputil.RandAddr(n)
-		if err != nil {
-			log.WithError(err).Error("Error generating random address")
-			return nil, err
-		}
+		ip := iputil.RandAddr(n)
 		if _, ok := tried[ip.String()]; ok { // this address was already tried
 			continue
 		}

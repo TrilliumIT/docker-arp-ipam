@@ -122,7 +122,7 @@ func (ns *neighSubscription) probeAndWait(addr *net.IPNet, to time.Duration) (re
 				return reachable, nil
 			}
 			// If we've waited 8 seconds, consider incomplete to be known
-			if n.State == netlink.NUD_INCOMPLETE {
+			if n == nil || n.State == netlink.NUD_INCOMPLETE {
 				l.Debug("Incomplete assumed non-reachable after timeout.")
 				return false, nil
 			}
